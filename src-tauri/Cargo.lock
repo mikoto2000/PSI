@@ -2234,6 +2234,7 @@ name = "png-inspector"
 version = "0.1.0"
 dependencies = [
  "crc32fast",
+ "flate2",
  "serde",
 ]
 

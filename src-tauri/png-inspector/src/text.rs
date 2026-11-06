@@ -12,10 +12,20 @@ pub struct Text {
 }
 
 pub fn decode_text(name: &str, data: &[u8]) -> Result<Text, String> {
-    if name != "tEXt" {
-        return Err(format!("Unsupported text chunk: {name}"));
-    }
     let (keyword, body) = keyword(data)?;
+    let compressed = name == "zTXt";
+    let expanded;
+    let body = match name {
+        "tEXt" => body,
+        "zTXt" => {
+            let [0, stream @ ..] = body else {
+                return Err("Invalid or missing zTXt compression method".into());
+            };
+            expanded = inflate(stream)?;
+            &expanded
+        }
+        _ => return Err(format!("Unsupported text chunk: {name}")),
+    };
     if body.contains(&0) {
         return Err("Text contains NUL".into());
     }
@@ -24,7 +34,7 @@ pub fn decode_text(name: &str, data: &[u8]) -> Result<Text, String> {
         text: latin1(body),
         language_tag: None,
         translated_keyword: None,
-        compressed: false,
+        compressed,
         encoding: "Latin-1",
     })
 }
@@ -54,4 +64,34 @@ fn split_field<'a>(data: &'a [u8], field: &str) -> Result<(&'a [u8], &'a [u8]), 
 
 fn latin1(bytes: &[u8]) -> String {
     bytes.iter().copied().map(char::from).collect()
+}
+
+pub(crate) const MAX_EXPANDED: usize = 4 * 1024 * 1024;
+
+pub(crate) fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {
+    use flate2::{Decompress, FlushDecompress, Status};
+    let mut decoder = Decompress::new(true);
+    let mut output = Vec::new();
+    let mut block = [0; 8192];
+    loop {
+        let consumed = decoder.total_in() as usize;
+        let produced = decoder.total_out() as usize;
+        let status = decoder
+            .decompress(&data[consumed..], &mut block, FlushDecompress::None)
+            .map_err(|_| "Invalid zlib stream")?;
+        let end = decoder.total_out() as usize;
+        if end > MAX_EXPANDED {
+            return Err("zlib output exceeds the 4 MiB expansion limit".into());
+        }
+        output.extend_from_slice(&block[..end - produced]);
+        if status == Status::StreamEnd {
+            if decoder.total_in() as usize != data.len() {
+                return Err("Trailing bytes after zlib stream".into());
+            }
+            return Ok(output);
+        }
+        if consumed == decoder.total_in() as usize && produced == end {
+            return Err("Truncated zlib stream".into());
+        }
+    }
 }

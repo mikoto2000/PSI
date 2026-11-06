@@ -229,3 +229,58 @@ fn validates_latin1_keyword_and_body_separators() {
             .contains("NUL")
     );
 }
+
+pub(crate) fn zlib(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(data).unwrap();
+    encoder.finish().unwrap()
+}
+
+#[test]
+fn decodes_zlib_compressed_latin1() {
+    let data = [b"Caf\xe9\0\0".as_slice(), &zlib(b"Cr\xe8me")].concat();
+    let text = decode_text("zTXt", &data).unwrap();
+    assert_eq!(
+        (text.keyword.as_str(), text.text.as_str(), text.compressed),
+        ("Café", "Crème", true)
+    );
+}
+
+#[test]
+fn rejects_bad_zlib_and_caps_decompression() {
+    let decode = |stream: &[u8]| decode_text("zTXt", &[b"K\0\0".as_slice(), stream].concat());
+    let good = zlib(b"content");
+    let mut damaged = good.clone();
+    *damaged.last_mut().unwrap() ^= 1;
+    for stream in [
+        b"broken".as_slice(),
+        &good[..good.len() - 1],
+        &damaged,
+        &[good.as_slice(), b"trailing"].concat(),
+    ] {
+        assert!(decode(stream).unwrap_err().contains("zlib"));
+    }
+    assert!(
+        decode_text("zTXt", b"K\0\x01bad")
+            .unwrap_err()
+            .contains("compression method")
+    );
+    assert!(
+        decode_text("zTXt", b"K\0")
+            .unwrap_err()
+            .contains("compression method")
+    );
+    assert!(
+        decode(&zlib(&vec![b'x'; 4 * 1024 * 1024 + 1]))
+            .unwrap_err()
+            .contains("limit")
+    );
+    assert_eq!(
+        decode(&zlib(&vec![b'x'; 4 * 1024 * 1024]))
+            .unwrap()
+            .text
+            .len(),
+        4 * 1024 * 1024
+    );
+}
