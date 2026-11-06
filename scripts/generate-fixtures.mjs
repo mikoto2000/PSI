@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+import { URL } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { crc32, deflateSync } from 'node:zlib'
 
