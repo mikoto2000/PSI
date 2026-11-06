@@ -84,3 +84,7 @@ fn current(active: &mut Option<OpenFile>, id: u32) -> Result<&mut OpenFile, Stri
 fn file_error(error: std::io::Error) -> String {
     format!("Could not open PNG: {error}")
 }
+
+#[cfg(test)]
+#[path = "document_tests.rs"]
+mod tests;

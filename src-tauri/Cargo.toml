@@ -16,3 +16,6 @@ tauri-plugin-dialog = "2"
 [workspace]
 members = ["png-inspector"]
 resolver = "3"
+
+[dev-dependencies]
+serde_json = "1"
