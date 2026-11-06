@@ -86,3 +86,16 @@ footer { display: flex; gap: 12px; justify-content: space-between; margin-top: a
   .app-shell { padding-top: 15px; }
   .table-scroll { max-height: 45vh; }
 }
+
+.view-switch { display: flex; flex-wrap: wrap; gap: 4px; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+.view-switch button, .secondary { border: 1px solid transparent; border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.view-switch button:hover, .secondary:hover { background: #25334a; color: #edf7ff; }
+.view-switch button[aria-pressed="true"] { background: #20383f; border-color: #36585f; color: var(--accent); }
+.view-switch button span { margin-left: 3px; font-family: var(--mono); }
+.secondary { border-color: var(--line); background: #202d41; color: #e9eef8; }
+.text-detail { border-top: 1px solid var(--line); margin-top: 12px; }
+.text-detail .facts { margin-top: 4px; }
+.text-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 13px; font-weight: 700; }
+.text-switch { padding: 8px 0; border: 0; }
+.metadata-body { margin-top: 6px; padding: 10px; overflow: auto; max-height: 46vh; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 7px; background: #101723; font: 12px/1.6 var(--mono); }
+.copy-status { color: var(--accent); font-size: 12px; margin-top: 7px; }

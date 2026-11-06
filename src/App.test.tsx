@@ -88,3 +88,63 @@ describe('PNG inspection', () => {
     expect(screen.getByRole('table', { name: 'チャンク一覧' })).toBeInTheDocument()
   })
 })
+
+describe('text metadata', () => {
+  const metadataSample: DocumentInfo = {
+    ...sample,
+    report: {
+      ...sample.report,
+      chunks: [
+        sample.report.chunks[0],
+        chunk('tEXt', 'Latin-1 text', 33, true, 'prompt'),
+        chunk('iTXt', 'International text', 58, true, 'prompt'),
+        ...sample.report.chunks.slice(1).map((item) => ({ ...item, offset: item.offset + 50 })),
+      ],
+    },
+  }
+  const raw = '{"id":9007199254740993,"nodes":[{"key":"a","key":"b"}]}'
+  const formatted = '{\n  "id": 9007199254740993,\n  "nodes": [\n    {\n      "key": "a",\n      "key": "b"\n    }\n  ]\n}'
+  const text = { keyword: 'prompt', languageTag: 'ja', translatedKeyword: '指示', compressed: true, encoding: 'UTF-8' }
+
+  beforeEach(() => {
+    vi.mocked(desktop.pick).mockResolvedValue(metadataSample)
+    vi.mocked(desktop.detail).mockImplementation(async (_, index) => ({
+      fields: [],
+      text: index === 1 || index === 2 ? { ...text, text: index === 1 ? raw : '日本語 {broken' } : null,
+    }))
+  })
+
+  it('shows each duplicate keyword, opens details and falls back to plain text', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+    await user.click(await screen.findByRole('button', { name: /テキストメタデータ/ }))
+    const table = screen.getByRole('table', { name: 'テキストメタデータ一覧' })
+    expect(within(table).getAllByText('prompt')).toHaveLength(2)
+    expect(within(table).queryByText('IHDR')).not.toBeInTheDocument()
+    await user.click(within(table).getByRole('button', { name: 'iTXt' }))
+    expect(await screen.findByText('日本語 {broken')).toBeInTheDocument()
+    expect(screen.getByText('指示')).toBeInTheDocument()
+    expect(screen.getByText('ja')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '整形 JSON' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /すべてのチャンク/ }))
+    expect(screen.getByRole('table', { name: 'チャンク一覧' })).toBeInTheDocument()
+  })
+
+  it('formats nested JSON without changing numbers or duplicate keys and copies the active view', async () => {
+    const user = userEvent.setup()
+    const copy = vi.spyOn(navigator.clipboard, 'writeText')
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+    await user.click(await screen.findByRole('button', { name: 'tEXt' }))
+    const body = await screen.findByLabelText('テキスト本文')
+    expect(body.textContent).toBe(formatted)
+    await user.click(screen.getByRole('button', { name: 'JSON をコピー' }))
+    expect(copy).toHaveBeenLastCalledWith(formatted)
+    expect(screen.getByText('コピーしました')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '元のテキスト' }))
+    expect(body.textContent).toBe(raw)
+    await user.click(screen.getByRole('button', { name: 'テキストをコピー' }))
+    expect(copy).toHaveBeenLastCalledWith(raw)
+  })
+})

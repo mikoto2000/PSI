@@ -1,10 +1,24 @@
-import { useEffect, useState } from 'react'
-import { desktop, type Chunk, type Detail, type DocumentInfo } from './desktop'
+import { formatJson } from './json'
+import { useEffect, useMemo, useState } from 'react'
+import { desktop, type Chunk, type Detail, type DocumentInfo, type TextMetadata } from './desktop'
 
 export function Inspector({ document }: { document: DocumentInfo }) {
   const { report } = document
   const [index, setIndex] = useState(0)
+  const [metadataOnly, setMetadataOnly] = useState(false)
+  const rows = useMemo(() => report.chunks.map((chunk, item) => ({ chunk, item })), [report.chunks])
+  const textRows = useMemo(() => rows.filter(({ chunk }) => ['tEXt', 'zTXt', 'iTXt'].includes(chunk.name)), [rows])
+  const visible = metadataOnly ? textRows : rows
   const chunk = report.chunks[index]
+
+  function changeView(textOnly: boolean) {
+    setMetadataOnly(textOnly)
+    if (textOnly && !textRows.some((row) => row.item === index)) {
+      setIndex(textRows[0]?.item ?? -1)
+    } else if (!textOnly && index < 0) {
+      setIndex(0)
+    }
+  }
   const crcErrors = report.chunks.filter((chunk) => chunk.storedCrc !== chunk.computedCrc).length
   const structureWarnings = report.issues.length + report.chunks.reduce((sum, chunk) => sum + chunk.issues.length, 0)
 
@@ -22,7 +36,11 @@ export function Inspector({ document }: { document: DocumentInfo }) {
       <Preview document={document} />
       <section className="panel list-panel" aria-label="チャンク">
         <div className="panel-title"><h2>チャンク一覧</h2><span className="pill">{report.chunks.length} 件</span></div>
-        <ChunkList chunks={report.chunks} index={index} onSelect={setIndex} />
+        <div className="view-switch" role="group" aria-label="チャンク表示">
+          <button aria-pressed={!metadataOnly} onClick={() => changeView(false)}>すべてのチャンク</button>
+          <button aria-pressed={metadataOnly} onClick={() => changeView(true)}>テキストメタデータ <span>{textRows.length}</span></button>
+        </div>
+        <ChunkList rows={visible} index={index} onSelect={setIndex} metadataOnly={metadataOnly} />
       </section>
       {chunk ? <ChunkDetail key={index} id={document.id} index={index} chunk={chunk} /> :
         <section className="panel"><div className="panel-title"><h2>チャンク詳細</h2></div><p className="panel-body muted">表示できるチャンクがありません</p></section>}
@@ -67,15 +85,15 @@ function Preview({ document: { id, name, size, report } }: { document: DocumentI
   </section>
 }
 
-function ChunkList({ chunks, index, onSelect }: { chunks: Chunk[]; index: number; onSelect: (index: number) => void }) {
-  if (!chunks.length) return <p className="panel-body muted">読み取れたチャンクはありません</p>
+function ChunkList({ rows, index, onSelect, metadataOnly }: { rows: { chunk: Chunk; item: number }[]; index: number; onSelect: (index: number) => void; metadataOnly: boolean }) {
+  if (!rows.length) return <p className="panel-body muted">{metadataOnly ? "テキストメタデータはありません" : "読み取れたチャンクはありません"}</p>
   return <div className="table-scroll">
-    <table aria-label="チャンク一覧">
+    <table aria-label={metadataOnly ? "テキストメタデータ一覧" : "チャンク一覧"}>
       <thead><tr><th scope="col">チャンク</th><th scope="col">サイズ</th><th scope="col">オフセット</th><th scope="col">CRC</th></tr></thead>
-      <tbody>{chunks.map((chunk, item) =>
+      <tbody>{rows.map(({ chunk, item }) =>
         <tr key={chunk.offset} className={index === item ? 'selected' : ''} onClick={() => onSelect(item)}>
           <td><button className="chunk-button" aria-pressed={index === item} onClick={(event) => { event.stopPropagation(); onSelect(item) }}>{chunk.name}</button>
-            <small>{chunk.description}{chunk.issues.length > 0 && <span className="warn-mark" title={chunk.issues.join('\n')}> ⚠</span>}</small></td>
+            <small>{metadataOnly ? chunk.textKeyword ?? "Keyword 不明" : chunk.description}{chunk.issues.length > 0 && <span className="warn-mark" title={chunk.issues.join('\n')}> ⚠</span>}</small></td>
           <td className="numeric">{byteCount(chunk.length)}</td>
           <td className="numeric">{offsetHex(chunk.offset)}</td>
           <td><Crc chunk={chunk} /></td>
@@ -116,7 +134,10 @@ function ChunkDetail({ chunk, id, index }: { chunk: Chunk; id: number; index: nu
         ['計算した CRC', crcHex(chunk.computedCrc)],
       ]} />
       {error ? <p className="problem detail-warnings" role="alert">{error}</p> : !detail ? <p className="muted" role="status">詳細を読み込み中…</p> :
-        <Facts fields={detail.fields.map(({ label, value }) => [label, value])} />}
+        <>
+          <Facts fields={detail.fields.map(({ label, value }) => [label, value])} />
+          {detail.text && <MetadataText metadata={detail.text} />}
+        </>}
     </div>
   </section>
 }
@@ -126,7 +147,7 @@ function Crc({ chunk }: { chunk: Chunk }) {
   return <span className={ok ? 'pill ok' : 'pill bad'}>{ok ? '一致' : '不一致'}</span>
 }
 
-export function Facts({ fields }: { fields: [string, string][] }) {
+function Facts({ fields }: { fields: [string, string][] }) {
   if (!fields.length) return null
   return <dl className="facts">{fields.map(([label, value]) =>
     <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
@@ -140,4 +161,42 @@ function offsetHex(offset: number) {
 }
 function crcHex(crc: number) {
   return '0x' + crc.toString(16).toUpperCase().padStart(8, '0')
+}
+
+function MetadataText({ metadata }: { metadata: TextMetadata }) {
+  const formatted = useMemo(() => formatJson(metadata.text), [metadata.text])
+  const [raw, setRaw] = useState(false)
+  const [status, setStatus] = useState('')
+  const isJsonView = formatted !== null && !raw
+  const content = isJsonView ? formatted : metadata.text
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(content)
+      setStatus('コピーしました')
+    } catch (error) {
+      setStatus('コピーできませんでした。' + String(error))
+    }
+  }
+
+  return <div className="text-detail">
+    <Facts fields={[
+      ['Keyword', metadata.keyword],
+      ['Encoding', metadata.encoding],
+      ['Compression', metadata.compressed ? 'Deflate (zlib)' : 'なし'],
+      ...(metadata.languageTag !== null ? [['Language Tag', metadata.languageTag] as [string, string]] : []),
+      ...(metadata.translatedKeyword !== null ? [['Translated Keyword', metadata.translatedKeyword] as [string, string]] : []),
+    ]} />
+    <div className="text-toolbar">
+      <h4>Text</h4>
+      <button className="secondary" onClick={() => void copy()}>{isJsonView ? 'JSON をコピー' : 'テキストをコピー'}</button>
+    </div>
+    {formatted !== null && <div className="view-switch text-switch" role="group" aria-label="本文の表示形式">
+      <button aria-pressed={!raw} onClick={() => { setRaw(false); setStatus('') }}>整形 JSON</button>
+      <button aria-pressed={raw} onClick={() => { setRaw(true); setStatus('') }}>元のテキスト</button>
+    </div>}
+    <pre className="metadata-body" aria-label="テキスト本文" tabIndex={0}>{content}</pre>
+    {content === '' && <p className="muted">空のテキスト</p>}
+    {status && <p className="copy-status" role="status">{status}</p>}
+  </div>
 }
