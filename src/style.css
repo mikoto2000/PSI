@@ -1,1 +1,88 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family: system-ui, "Yu Gothic UI", sans-serif;
+  background: #0d121d;
+  color: #e9eef8;
+  --panel: #151d2b;
+  --line: #2b384c;
+  --muted: #a2afc3;
+  --accent: #80e6d6;
+  --mono: "Cascadia Mono", Consolas, monospace;
+}
+
+button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .65; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.app-shell { width: min(100%, 1600px); min-height: 100vh; padding: 24px clamp(16px, 2.5vw, 38px) 12px; margin: auto; display: flex; flex-direction: column; gap: 16px; }
+.topbar, .brand, .filebar, .file-id, .panel-title { display: flex; align-items: center; gap: 12px; }
+.topbar, .filebar, .panel-title { justify-content: space-between; }
+.topbar { padding: 0 0 18px; border-bottom: 1px solid var(--line); }
+.brand-mark { flex: none; display: grid; place-items: center; width: 42px; height: 42px; background: #173a3e; border: 1px solid #2c6264; border-radius: 11px; color: var(--accent); font-size: 25px; }
+h1 { font-size: clamp(15px, 2.2vw, 24px); line-height: 1.2; font-weight: 720; letter-spacing: -.025em; }
+.brand p { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.primary { flex: none; border-radius: 8px; padding: 9px 15px; background: var(--accent); color: #0b2728; font-size: 13px; font-weight: 750; }
+.primary:hover { background: #a4f5e7; }
+.filebar { flex-wrap: wrap; }
+.file-id { min-width: 0; }
+.file-id strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-tag, .eyebrow { color: var(--accent); font: 700 12px var(--mono); letter-spacing: .08em; }
+.file-tag { padding: 5px 7px; border: 1px solid #386366; border-radius: 5px; }
+.empty { display: grid; align-content: center; justify-items: center; gap: 14px; min-height: 390px; flex: 1; padding: 32px 18px; border: 1px dashed #3d5067; border-radius: 15px; text-align: center; background: radial-gradient(ellipse at top, #192b3c, var(--panel) 65%); }
+.empty-icon { display: grid; place-items: center; width: 72px; height: 82px; margin-bottom: 10px; border: 1px solid #407b81; border-radius: 12px; color: var(--accent); background: #153239; font: 800 21px var(--mono); transform: rotate(-5deg); }
+.empty h2 { font-size: clamp(18px, 3vw, 29px); font-weight: 700; }
+.empty > p:not(.eyebrow) { color: var(--muted); font-size: 14px; }
+.workspace { display: grid; grid-template-columns: minmax(200px, .76fr) minmax(330px, 1.3fr) minmax(280px, 1fr); align-items: start; gap: 14px; }
+.panel { min-width: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.panel-title { min-height: 49px; padding: 11px 15px; border-bottom: 1px solid var(--line); }
+.panel-title h2 { font-size: 14px; font-weight: 700; }
+.panel-body { padding: 15px; }
+.preview { display: grid; place-items: center; min-height: 152px; height: clamp(152px, 24vh, 245px); overflow: hidden; border: 1px solid #334156; border-radius: 7px; background: repeating-conic-gradient(#2b3646 0 25%, #202938 0 50%) 0 / 20px 20px; }
+.preview img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.preview-note { display: grid; gap: 4px; margin: 12px; padding: 8px; text-align: center; overflow-wrap: anywhere; border-radius: 5px; background: #151d2b; font-size: 12px; }
+.preview-note small { color: var(--muted); }
+.facts { margin-top: 13px; font-size: 12px; }
+.facts div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 10px; border-bottom: 1px solid #263448; padding: 8px 0; }
+.facts div:last-child { border-bottom: 0; }
+.facts dt { color: var(--muted); overflow-wrap: anywhere; }
+.facts dd { overflow-wrap: anywhere; font-family: var(--mono); }
+.table-scroll { overflow: auto; max-height: min(64vh, 680px); }
+table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 12px; }
+th { position: sticky; top: 0; background: #1b2638; color: var(--muted); font-weight: 650; z-index: 1; }
+th, td { padding: 8px 9px; border-bottom: 1px solid #293549; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr:focus-within { background: #1d2b3d; }
+tr.selected { background: #20383f; }
+tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+td small { display: block; margin-top: 2px; color: var(--muted); line-height: 1.25; }
+.chunk-button { font: 750 14px var(--mono); color: var(--accent); }
+.pill { display: inline-flex; align-items: center; width: fit-content; padding: 3px 7px; border-radius: 5px; background: #202d41; color: #c4d0e2; font-size: 11px; line-height: 1.35; white-space: nowrap; }
+.pill.ok { background: #173b39; color: #a6eed2; }
+.pill.bad { background: #43272c; color: #ffc3bb; }
+.numeric, .mono { font-family: var(--mono); }
+.numeric { white-space: nowrap; }
+.warn-mark { color: #ffda94; }
+.chunk-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; }
+.chunk-hero h3 { color: var(--accent); font: 750 25px var(--mono); }
+.chunk-hero p { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.attributes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.detail-body { overflow: auto; max-height: min(65vh, 700px); }
+.detail-warnings, .message { margin-top: 8px; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
+.detail-warnings, .problem { color: #ffd6b2; background: #352925; border-color: #684f3b; }
+.detail-warnings li, .message li { list-style: disc inside; }
+.muted { color: var(--muted); font-size: 13px; }
+footer { display: flex; gap: 12px; justify-content: space-between; margin-top: auto; padding: 8px 0; color: var(--muted); font: 11px var(--mono); letter-spacing: .04em; }
+
+@media (max-width: 1050px) {
+  .workspace { grid-template-columns: minmax(190px, .75fr) minmax(320px, 1.25fr); }
+  .detail-panel { grid-column: 1 / -1; }
+  .detail-body { max-height: none; }
+}
+
+@media (max-width: 650px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .brand-mark { display: none; }
+  .app-shell { padding-top: 15px; }
+  .table-scroll { max-height: 45vh; }
+}
