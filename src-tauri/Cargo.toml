@@ -7,7 +7,11 @@ edition = "2024"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+png-inspector = { version = "0.1.0", path = "png-inspector" }
+serde = { version = "1", features = ["derive", "rc"] }
 tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2.5"
+tauri-plugin-dialog = "2"
 
 [workspace]
 members = ["png-inspector"]

@@ -172,7 +172,7 @@ function MetadataText({ metadata }: { metadata: TextMetadata }) {
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(content)
+      await desktop.copy(content)
       setStatus('コピーしました')
     } catch (error) {
       setStatus('コピーできませんでした。' + String(error))

@@ -1,12 +1,12 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { desktop, type Chunk, type DocumentInfo } from './desktop'
 
 vi.mock('./desktop', () => ({
-  desktop: { pick: vi.fn(), detail: vi.fn(), preview: vi.fn() },
+  desktop: { pick: vi.fn(), detail: vi.fn(), preview: vi.fn(), onDrop: vi.fn(), openDrop: vi.fn(), copy: vi.fn() },
 }))
 
 function chunk(name: string, description: string, offset: number, crcOk = true, textKeyword: string | null = null): Chunk {
@@ -27,6 +27,7 @@ const sample: DocumentInfo = {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.mocked(desktop.onDrop).mockResolvedValue(vi.fn())
   vi.mocked(desktop.pick).mockResolvedValue(sample)
   vi.mocked(desktop.detail).mockImplementation(async (_, index) => ({
     fields: index === 0 ? [{ label: 'Width', value: '32' }] : [],
@@ -133,7 +134,7 @@ describe('text metadata', () => {
 
   it('formats nested JSON without changing numbers or duplicate keys and copies the active view', async () => {
     const user = userEvent.setup()
-    const copy = vi.spyOn(navigator.clipboard, 'writeText')
+    const copy = vi.mocked(desktop.copy)
     render(<App />)
     await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
     await user.click(await screen.findByRole('button', { name: 'tEXt' }))
@@ -147,4 +148,17 @@ describe('text metadata', () => {
     await user.click(screen.getByRole('button', { name: 'テキストをコピー' }))
     expect(copy).toHaveBeenLastCalledWith(raw)
   })
+})
+
+it('opens a dropped PNG and replaces the previous document', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  expect(await screen.findByText('sample.png')).toBeInTheDocument()
+  vi.mocked(desktop.openDrop).mockResolvedValue({ ...sample, id: 2, name: 'dropped.png' })
+  const onDrop = vi.mocked(desktop.onDrop).mock.lastCall?.[0]
+  expect(onDrop).toBeTypeOf('function')
+  await act(async () => { onDrop?.() })
+  expect(await screen.findByText('dropped.png')).toBeInTheDocument()
+  expect(screen.queryByText('sample.png')).not.toBeInTheDocument()
 })
