@@ -13,6 +13,9 @@ pub struct Text {
 
 pub fn decode_text(name: &str, data: &[u8]) -> Result<Text, String> {
     let (keyword, body) = keyword(data)?;
+    if name == "iTXt" {
+        return international(keyword, body);
+    }
     let compressed = name == "zTXt";
     let expanded;
     let body = match name {
@@ -37,6 +40,50 @@ pub fn decode_text(name: &str, data: &[u8]) -> Result<Text, String> {
         compressed,
         encoding: "Latin-1",
     })
+}
+
+fn international(keyword: String, data: &[u8]) -> Result<Text, String> {
+    let [flag, method, fields @ ..] = data else {
+        return Err("Missing iTXt compression fields".into());
+    };
+    let compressed = match flag {
+        0 => false, // PNG decoders ignore the method when the flag is zero.
+        1 if *method == 0 => true,
+        1 => return Err("Invalid iTXt compression method".into()),
+        _ => return Err("Invalid iTXt compression flag".into()),
+    };
+    let (language, rest) = split_field(fields, "Language Tag")?;
+    let (translated, body) = split_field(rest, "Translated Keyword")?;
+    let language = utf8(language, "Language Tag")?;
+    if !language.is_empty() {
+        language_tags::LanguageTag::parse(language)
+            .map_err(|_| "Invalid Language Tag (BCP 47)")?
+            .validate()
+            .map_err(|_| "Invalid Language Tag (BCP 47)")?;
+    }
+    let translated = utf8(translated, "Translated Keyword")?.to_owned();
+    let expanded;
+    let body = if compressed {
+        expanded = inflate(body)?;
+        &expanded
+    } else {
+        body
+    };
+    if body.contains(&0) {
+        return Err("Text contains NUL".into());
+    }
+    Ok(Text {
+        keyword,
+        text: utf8(body, "Text")?.to_owned(),
+        language_tag: Some(language.to_owned()),
+        translated_keyword: Some(translated),
+        compressed,
+        encoding: "UTF-8",
+    })
+}
+
+fn utf8<'a>(data: &'a [u8], field: &str) -> Result<&'a str, String> {
+    std::str::from_utf8(data).map_err(|_| format!("{field} is not valid UTF-8"))
 }
 
 fn keyword(data: &[u8]) -> Result<(String, &[u8]), String> {

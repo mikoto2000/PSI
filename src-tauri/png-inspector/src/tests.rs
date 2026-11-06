@@ -284,3 +284,43 @@ fn rejects_bad_zlib_and_caps_decompression() {
         4 * 1024 * 1024
     );
 }
+
+#[test]
+fn decodes_international_metadata_with_optional_compression() {
+    let text = decode_text("iTXt", "Title\0\0\x07ja-JP\0表題\0日本語の本文".as_bytes()).unwrap();
+    assert_eq!(
+        (
+            text.language_tag.as_deref(),
+            text.translated_keyword.as_deref(),
+            text.text.as_str()
+        ),
+        (Some("ja-JP"), Some("表題"), "日本語の本文")
+    );
+    assert_eq!((text.encoding, text.compressed), ("UTF-8", false));
+    let data = [
+        b"Title\0\x01\0ja\0\0".as_slice(),
+        &zlib("日本語".as_bytes()),
+    ]
+    .concat();
+    let text = decode_text("iTXt", &data).unwrap();
+    assert_eq!((text.text.as_str(), text.compressed), ("日本語", true));
+    assert_eq!(decode_text("iTXt", b"Title\0\0\0\0\0").unwrap().text, "");
+}
+
+#[test]
+fn rejects_invalid_international_metadata() {
+    for (data, reason) in [
+        (b"K\0\x02\0\0\0body".as_slice(), "compression flag"),
+        (b"K\0\x01\x01\0\0body", "compression method"),
+        (b"K\0\0", "compression fields"),
+        (b"K\0\0\0ja", "Language Tag separator"),
+        (b"K\0\0\0ja\0title", "Translated Keyword separator"),
+        (b"K\0\0\0ja--JP\0\0body", "Language Tag"),
+        (b"K\0\0\0ja\0\xff\0body", "UTF-8"),
+        (b"K\0\0\0ja\0\0\xff", "UTF-8"),
+        (b"K\0\0\0ja\0\0a\0b", "NUL"),
+    ] {
+        let error = decode_text("iTXt", data).unwrap_err();
+        assert!(error.contains(reason), "{reason}: {error}");
+    }
+}

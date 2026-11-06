@@ -7,3 +7,4 @@ edition = "2024"
 crc32fast = "1"
 serde = { version = "1", features = ["derive"] }
 flate2 = "1"
+language-tags = "0.3"
