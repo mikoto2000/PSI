@@ -29,3 +29,6 @@ mod tests;
 
 mod detail;
 pub use detail::{Detail, read_detail};
+
+mod kind;
+pub use kind::Attributes;

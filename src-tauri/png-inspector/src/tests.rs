@@ -427,3 +427,59 @@ fn preserves_all_text_chunks_and_duplicate_keywords() {
         );
     }
 }
+
+#[test]
+fn identifies_unknown_chunk_properties_and_keeps_scanning() {
+    let report = inspect(png(&[
+        chunk(b"vpAg", &[]),
+        chunk(b"AbCD", &[]),
+        chunk(b"pUBX", &[]),
+    ]));
+    let ancillary = &report.chunks[1];
+    assert_eq!(
+        (
+            ancillary.attributes.unwrap().ancillary,
+            ancillary.attributes.unwrap().private,
+            ancillary.attributes.unwrap().safe_to_copy
+        ),
+        (true, true, true)
+    );
+    assert!(ancillary.issues.is_empty());
+    let critical = &report.chunks[2];
+    assert_eq!(
+        (
+            critical.attributes.unwrap().ancillary,
+            critical.attributes.unwrap().private,
+            critical.attributes.unwrap().safe_to_copy
+        ),
+        (false, true, false)
+    );
+    assert!(
+        critical
+            .issues
+            .iter()
+            .any(|m| m.contains("Unknown critical"))
+    );
+    assert_eq!(report.chunks[3].description, "Unknown chunk");
+    assert_eq!(report.chunks.last().unwrap().name, "IEND");
+}
+
+#[test]
+fn reports_palette_and_metadata_order_rules() {
+    let mut indexed = HEADER.to_vec();
+    indexed[9] = 3;
+    let mut bytes = SIGNATURE.to_vec();
+    for item in [
+        chunk(b"IHDR", &indexed),
+        chunk(b"IDAT", &[]),
+        chunk(b"PLTE", &[0, 0, 0]),
+        chunk(b"gAMA", &45455_u32.to_be_bytes()),
+        chunk(b"IEND", &[]),
+    ] {
+        bytes.extend(item);
+    }
+    let report = inspect(bytes);
+    assert!(report.chunks[1].issues.iter().any(|m| m.contains("PLTE")));
+    assert!(report.chunks[2].issues.iter().any(|m| m.contains("order")));
+    assert!(report.chunks[3].issues.iter().any(|m| m.contains("before")));
+}

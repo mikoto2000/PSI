@@ -1,4 +1,8 @@
-use crate::Header;
+use crate::{
+    Header,
+    kind::{Attributes, description},
+    text::keyword,
+};
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -8,6 +12,9 @@ pub const MAX_CHUNKS: usize = 20_000;
 #[serde(rename_all = "camelCase")]
 pub struct Chunk {
     pub name: String,
+    pub description: &'static str,
+    pub attributes: Option<Attributes>,
+    pub text_keyword: Option<String>,
     pub length: u32,
     pub offset: u64,
     pub stored_crc: u32,
@@ -73,14 +80,31 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
             break;
         }
 
-        let mut issues = order.check(&code, length, report.chunks.is_empty());
-        if !code.iter().all(u8::is_ascii_alphabetic) {
-            issues.push("Invalid chunk name (expected four ASCII letters)".into());
-        } else if code[2].is_ascii_lowercase() {
-            issues.push("Reserved chunk-name bit is set".into());
+        let mut issues = order.check(
+            &code,
+            length,
+            report.chunks.is_empty(),
+            report.header.as_ref(),
+        );
+        let attributes = Attributes::from_code(&code);
+        let description = description(&code);
+        match attributes {
+            None => issues.push("Invalid chunk name (expected four ASCII letters)".into()),
+            Some(bits) => {
+                if bits.reserved_bit_set {
+                    issues.push("Reserved chunk-name bit is set".into());
+                }
+                if !bits.ancillary && description.is_none() {
+                    issues.push("Unknown critical chunk".into());
+                }
+            }
         }
+        let mut text_keyword = None;
         if code == *b"IHDR" && length != 13 {
             issues.push("IHDR must contain 13 bytes".into());
+        }
+        if length == 0 && matches!(&code, b"tEXt" | b"zTXt" | b"iTXt") {
+            issues.push("Missing Keyword separator".into());
         }
         let mut hasher = crc32fast::Hasher::new();
         hasher.update(&code);
@@ -97,6 +121,12 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
                     Err(error) => issues.push(error),
                 }
             }
+            if remaining == length as usize && matches!(&code, b"tEXt" | b"zTXt" | b"iTXt") {
+                match keyword(&buffer[..count.min(80)]) {
+                    Ok((key, _)) => text_keyword = Some(key),
+                    Err(error) => issues.push(error),
+                }
+            }
             hasher.update(&buffer[..count]);
             remaining -= count;
         }
@@ -104,6 +134,9 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
         reader.read_exact(&mut crc).map_err(read_error)?;
         report.chunks.push(Chunk {
             name,
+            description: description.unwrap_or("Unknown chunk"),
+            attributes,
+            text_keyword,
             length,
             offset,
             stored_crc: u32::from_be_bytes(crc),
@@ -139,13 +172,34 @@ struct Order {
     idat: bool,
     after_idat: bool,
     iend: bool,
+    seen: std::collections::HashSet<[u8; 4]>,
 }
 
 impl Order {
-    fn check(&mut self, code: &[u8; 4], length: u32, first: bool) -> Vec<String> {
+    fn check(
+        &mut self,
+        code: &[u8; 4],
+        length: u32,
+        first: bool,
+        header: Option<&Header>,
+    ) -> Vec<String> {
         let mut issues = Vec::new();
         if first && code != b"IHDR" {
             issues.push("IHDR must be the first chunk".into());
+        }
+        let before_palette = matches!(
+            code,
+            b"gAMA" | b"cHRM" | b"iCCP" | b"sRGB" | b"sBIT" | b"cICP" | b"mDCV" | b"cLLI"
+        );
+        let before_data = matches!(
+            code,
+            b"pHYs" | b"eXIf" | b"tRNS" | b"bKGD" | b"hIST" | b"acTL"
+        );
+        if (before_palette && self.plte) || ((before_palette || before_data) && self.idat) {
+            issues.push("Chunk must appear before PLTE or IDAT as specified for this type".into());
+        }
+        if (before_palette || before_data || code == b"tIME") && !self.seen.insert(*code) {
+            issues.push("Chunk may appear only once".into());
         }
         match code {
             b"IHDR" => {
@@ -158,11 +212,27 @@ impl Order {
                 if self.idat || self.plte {
                     issues.push("PLTE is out of order or duplicated".into());
                 }
+                if length == 0 || length > 768 || !length.is_multiple_of(3) {
+                    issues.push("PLTE must contain 1–256 RGB entries".into());
+                }
+                if let Some(header) = header {
+                    if matches!(header.color_type, 0 | 4) {
+                        issues.push("PLTE is forbidden in greyscale images".into());
+                    }
+                    if header.color_type == 3 && length / 3 > 1 << header.bit_depth {
+                        issues.push(
+                            "PLTE has more entries than the indexed bit depth permits".into(),
+                        );
+                    }
+                }
                 self.plte = true;
             }
             b"IDAT" => {
                 if self.after_idat {
                     issues.push("IDAT chunks must be consecutive".into());
+                }
+                if !self.idat && !self.plte && header.is_some_and(|h| h.color_type == 3) {
+                    issues.push("Indexed-color PNG requires PLTE before IDAT".into());
                 }
                 self.idat = true;
             }
