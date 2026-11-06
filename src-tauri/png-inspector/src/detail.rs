@@ -84,7 +84,9 @@ fn fields(name: &str, data: &[u8]) -> Result<Vec<Field>, String> {
                 field("Entries", data.len() / 3),
                 field(
                     "RGB Palette",
-                    data.chunks_exact(3)
+                    data.as_chunks::<3>()
+                        .0
+                        .iter()
                         .map(|rgb| format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]))
                         .collect::<Vec<_>>()
                         .join(" "),
@@ -137,7 +139,7 @@ fn fields(name: &str, data: &[u8]) -> Result<Vec<Field>, String> {
             "Blue (x, y)",
         ]
         .into_iter()
-        .zip(data.chunks_exact(8))
+        .zip(data.as_chunks::<8>().0)
         .map(|(label, xy)| field(label, format!("{}, {}", scaled(&xy[..4]), scaled(&xy[4..]))))
         .collect(),
         (
