@@ -324,3 +324,106 @@ fn rejects_invalid_international_metadata() {
         assert!(error.contains(reason), "{reason}: {error}");
     }
 }
+
+#[test]
+fn interprets_ancillary_metadata_in_human_units() {
+    let cases = [
+        (
+            *b"pHYs",
+            [
+                3780_u32.to_be_bytes().as_slice(),
+                &3780_u32.to_be_bytes(),
+                &[1],
+            ]
+            .concat(),
+            ("DPI (X × Y)", "96.01 × 96.01"),
+        ),
+        (
+            *b"gAMA",
+            45455_u32.to_be_bytes().to_vec(),
+            ("Image Gamma", "0.45455"),
+        ),
+        (
+            *b"tIME",
+            vec![7, 234, 11, 6, 8, 9, 60],
+            ("UTC", "2026-11-06 08:09:60"),
+        ),
+        (*b"sRGB", vec![2], ("Rendering Intent", "Saturation (2)")),
+        (
+            *b"cHRM",
+            [31270_u32.to_be_bytes().as_slice(), &[0; 28]].concat(),
+            ("White Point (x, y)", "0.31270, 0.00000"),
+        ),
+        (*b"PLTE", vec![255, 128, 0], ("Entries", "1")),
+        (
+            *b"eXIf",
+            b"II\x2a\0\x08\0\0\0\0\0\0\0\0\0".to_vec(),
+            ("Byte Order", "Little-endian (II)"),
+        ),
+    ];
+    for (name, bytes, (label, value)) in cases {
+        let mut reader = Cursor::new(png(&[chunk(&name, &bytes)]));
+        let report = scan(&mut reader).unwrap();
+        let detail = read_detail(&mut reader, &report.chunks[1]).unwrap();
+        assert!(
+            detail
+                .fields
+                .iter()
+                .any(|f| f.label == label && f.value == value),
+            "{detail:?}"
+        );
+    }
+    let mut profile = vec![0; 132];
+    profile[..4].copy_from_slice(&132_u32.to_be_bytes());
+    profile[16..20].copy_from_slice(b"RGB ");
+    profile[36..40].copy_from_slice(b"acsp");
+    let bytes = [b"Display\0\0".as_slice(), &zlib(&profile)].concat();
+    let mut reader = Cursor::new(png(&[chunk(b"iCCP", &bytes)]));
+    let report = scan(&mut reader).unwrap();
+    let detail = read_detail(&mut reader, &report.chunks[1]).unwrap();
+    assert!(
+        detail
+            .fields
+            .iter()
+            .any(|f| f.label == "Color Space" && f.value == "RGB")
+    );
+}
+
+#[test]
+fn rejects_malformed_or_oversized_detail_on_demand() {
+    for (name, data) in [
+        (*b"pHYs", vec![0; 8]),
+        (*b"gAMA", vec![0; 4]),
+        (*b"sRGB", vec![4]),
+        (*b"tIME", vec![7, 234, 2, 29, 0, 0, 0]),
+        (*b"eXIf", vec![0; 8]),
+        (*b"tEXt", vec![0; 4 * 1024 * 1024 + 1]),
+    ] {
+        let mut reader = Cursor::new(png(&[chunk(&name, &data)]));
+        let report = scan(&mut reader).unwrap();
+        assert!(
+            read_detail(&mut reader, &report.chunks[1]).is_err(),
+            "{name:?}"
+        );
+    }
+}
+
+#[test]
+fn preserves_all_text_chunks_and_duplicate_keywords() {
+    let mut reader = Cursor::new(png(&[
+        chunk(b"tEXt", b"Title\0one"),
+        chunk(b"zTXt", &[b"Title\0\0".as_slice(), &zlib(b"two")].concat()),
+        chunk(b"iTXt", "Title\0\0\0ja\0表題\0三".as_bytes()),
+    ]));
+    let report = scan(&mut reader).unwrap();
+    for (index, expected) in ["one", "two", "三"].into_iter().enumerate() {
+        let text = read_detail(&mut reader, &report.chunks[index + 1])
+            .unwrap()
+            .text
+            .unwrap();
+        assert_eq!(
+            (text.keyword.as_str(), text.text.as_str()),
+            ("Title", expected)
+        );
+    }
+}

@@ -41,7 +41,6 @@ pub fn decode_text(name: &str, data: &[u8]) -> Result<Text, String> {
         encoding: "Latin-1",
     })
 }
-
 fn international(keyword: String, data: &[u8]) -> Result<Text, String> {
     let [flag, method, fields @ ..] = data else {
         return Err("Missing iTXt compression fields".into());
@@ -86,7 +85,7 @@ fn utf8<'a>(data: &'a [u8], field: &str) -> Result<&'a str, String> {
     std::str::from_utf8(data).map_err(|_| format!("{field} is not valid UTF-8"))
 }
 
-fn keyword(data: &[u8]) -> Result<(String, &[u8]), String> {
+pub(crate) fn keyword(data: &[u8]) -> Result<(String, &[u8]), String> {
     let (key, rest) = split_field(data, "Keyword")?;
     if !(1..=79).contains(&key.len())
         || key.first() == Some(&b' ')

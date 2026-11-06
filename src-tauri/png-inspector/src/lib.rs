@@ -26,3 +26,6 @@ pub use text::{Text, decode_text};
 
 #[cfg(test)]
 mod tests;
+
+mod detail;
+pub use detail::{Detail, read_detail};
