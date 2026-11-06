@@ -162,3 +162,18 @@ it('opens a dropped PNG and replaces the previous document', async () => {
   expect(await screen.findByText('dropped.png')).toBeInTheDocument()
   expect(screen.queryByText('sample.png')).not.toBeInTheDocument()
 })
+
+it('pages through large chunk lists in file order', async () => {
+  const user = userEvent.setup()
+  const chunks = Array.from({ length: 202 }, (_, index) => chunk('vpAg', 'Unknown chunk', 8 + index * 12))
+  vi.mocked(desktop.pick).mockResolvedValue({ ...sample, report: { ...sample.report, chunks } })
+  render(<App />)
+  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  const table = await screen.findByRole('table', { name: 'チャンク一覧' })
+  expect(within(table).getAllByRole('row')).toHaveLength(201)
+  await user.click(screen.getByRole('button', { name: '次のページ' }))
+  const nextTable = screen.getByRole('table', { name: 'チャンク一覧' })
+  expect(within(nextTable).getAllByRole('row')).toHaveLength(3)
+  await user.click(within(nextTable).getAllByRole('button')[1])
+  expect(vi.mocked(desktop.detail)).toHaveBeenLastCalledWith(1, 201)
+})

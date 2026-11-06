@@ -99,3 +99,6 @@ footer { display: flex; gap: 12px; justify-content: space-between; margin-top: a
 .text-switch { padding: 8px 0; border: 0; }
 .metadata-body { margin-top: 6px; padding: 10px; overflow: auto; max-height: 46vh; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 7px; background: #101723; font: 12px/1.6 var(--mono); }
 .copy-status { color: var(--accent); font-size: 12px; margin-top: 7px; }
+
+.pagination { display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 8px 9px; border-top: 1px solid var(--line); color: var(--muted); font: 12px var(--mono); }
+.pagination button:disabled { cursor: default; }

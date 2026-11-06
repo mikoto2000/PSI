@@ -5,13 +5,21 @@ import { desktop, type Chunk, type Detail, type DocumentInfo, type TextMetadata 
 export function Inspector({ document }: { document: DocumentInfo }) {
   const { report } = document
   const [index, setIndex] = useState(0)
+  const [page, setPage] = useState(0)
   const [metadataOnly, setMetadataOnly] = useState(false)
   const rows = useMemo(() => report.chunks.map((chunk, item) => ({ chunk, item })), [report.chunks])
   const textRows = useMemo(() => rows.filter(({ chunk }) => ['tEXt', 'zTXt', 'iTXt'].includes(chunk.name)), [rows])
   const visible = metadataOnly ? textRows : rows
+  const pageSize = 200
+  const pages = Math.ceil(visible.length / pageSize)
+  const pageRows = visible.slice(page * pageSize, (page + 1) * pageSize)
   const chunk = report.chunks[index]
 
   function changeView(textOnly: boolean) {
+    if (textOnly === metadataOnly) return
+    const nextRows = textOnly ? textRows : rows
+    const position = nextRows.findIndex((row) => row.item === index)
+    setPage(Math.floor(Math.max(0, position) / pageSize))
     setMetadataOnly(textOnly)
     if (textOnly && !textRows.some((row) => row.item === index)) {
       setIndex(textRows[0]?.item ?? -1)
@@ -40,7 +48,12 @@ export function Inspector({ document }: { document: DocumentInfo }) {
           <button aria-pressed={!metadataOnly} onClick={() => changeView(false)}>すべてのチャンク</button>
           <button aria-pressed={metadataOnly} onClick={() => changeView(true)}>テキストメタデータ <span>{textRows.length}</span></button>
         </div>
-        <ChunkList rows={visible} index={index} onSelect={setIndex} metadataOnly={metadataOnly} />
+        <ChunkList key={`${metadataOnly}-${page}`} rows={pageRows} index={index} onSelect={setIndex} metadataOnly={metadataOnly} />
+        {pages > 1 && <nav className="pagination" aria-label="チャンク一覧のページ">
+          <button className="secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>前のページ</button>
+          <span aria-live="polite">{page + 1} / {pages}</span>
+          <button className="secondary" disabled={page + 1 === pages} onClick={() => setPage(page + 1)}>次のページ</button>
+        </nav>}
       </section>
       {chunk ? <ChunkDetail key={index} id={document.id} index={index} chunk={chunk} /> :
         <section className="panel"><div className="panel-title"><h2>チャンク詳細</h2></div><p className="panel-body muted">表示できるチャンクがありません</p></section>}
