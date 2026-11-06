@@ -22,3 +22,6 @@ mod tests;
 
 mod scan;
 pub use scan::{Chunk, Report, scan};
+
+mod header;
+pub use header::Header;

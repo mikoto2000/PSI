@@ -1,3 +1,4 @@
+use crate::Header;
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -16,6 +17,7 @@ pub struct Chunk {
 
 #[derive(Debug, Default, Serialize)]
 pub struct Report {
+    pub header: Option<Header>,
     pub chunks: Vec<Chunk>,
     pub issues: Vec<String>,
 }
@@ -77,6 +79,9 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
         } else if code[2].is_ascii_lowercase() {
             issues.push("Reserved chunk-name bit is set".into());
         }
+        if code == *b"IHDR" && length != 13 {
+            issues.push("IHDR must contain 13 bytes".into());
+        }
         let mut hasher = crc32fast::Hasher::new();
         hasher.update(&code);
         let mut remaining = length as usize;
@@ -85,6 +90,13 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
             reader
                 .read_exact(&mut buffer[..count])
                 .map_err(read_error)?;
+            if code == *b"IHDR" && length == 13 {
+                match Header::decode(&buffer[..count]) {
+                    Ok(header) if report.chunks.is_empty() => report.header = Some(header),
+                    Ok(_) => {}
+                    Err(error) => issues.push(error),
+                }
+            }
             hasher.update(&buffer[..count]);
             remaining -= count;
         }

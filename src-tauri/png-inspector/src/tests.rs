@@ -146,3 +146,42 @@ fn reads_large_chunk_in_bounded_blocks() {
     assert_eq!(report.chunks[1].length, 300_000);
     assert_eq!(report.chunks[1].computed_crc, report.chunks[1].stored_crc);
 }
+
+#[test]
+fn decodes_all_header_fields() {
+    let header = Header::decode(HEADER).unwrap();
+    assert_eq!((header.width, header.height, header.bit_depth), (1, 1, 8));
+    assert_eq!(
+        (header.color_type, header.color_name),
+        (6, "Truecolor with alpha")
+    );
+    assert_eq!(
+        (
+            header.compression_method,
+            header.filter_method,
+            header.interlace_method
+        ),
+        (0, 0, 0)
+    );
+    let mut interlaced = HEADER.to_vec();
+    interlaced[12] = 1;
+    assert_eq!(Header::decode(&interlaced).unwrap().interlace_method, 1);
+}
+
+#[test]
+fn rejects_illegal_header_fields_and_reports_them_during_scan() {
+    assert!(Header::decode(&HEADER[..12]).is_err());
+    for (offset, value) in [(0, 128), (3, 0), (8, 4), (9, 5), (10, 1), (11, 1), (12, 2)] {
+        let mut data = HEADER.to_vec();
+        data[offset] = value;
+        assert!(Header::decode(&data).is_err(), "field {offset}");
+    }
+    let mut bytes = png(&[]);
+    bytes[24] = 4;
+    assert!(
+        inspect(bytes).chunks[0]
+            .issues
+            .iter()
+            .any(|m| m.contains("bit depth"))
+    );
+}
