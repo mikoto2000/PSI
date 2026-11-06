@@ -105,3 +105,33 @@ fn preserves_diagnostics_and_rejects_access_from_an_old_document() {
             .any(|issue| issue.contains("Truncated IEND"))
     );
 }
+
+#[test]
+fn navigates_siblings_in_filename_order_and_stops_at_ends() {
+    let session = Session::default();
+    let first = session.open(&fixture("bad-crc.png")).unwrap();
+    assert!(
+        session
+            .adjacent(first.id, Direction::Previous)
+            .unwrap()
+            .is_none()
+    );
+    let second = session
+        .adjacent(first.id, Direction::Next)
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.name, "compressed-text.png");
+    assert!(session.adjacent(first.id, Direction::Next).is_err());
+    let first_again = session
+        .adjacent(second.id, Direction::Previous)
+        .unwrap()
+        .unwrap();
+    assert_eq!(first_again.name, first.name);
+    let last = session.open(&fixture("truncated.png")).unwrap();
+    assert!(
+        session
+            .adjacent(last.id, Direction::Next)
+            .unwrap()
+            .is_none()
+    );
+}

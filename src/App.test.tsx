@@ -6,7 +6,7 @@ import App from './App'
 import { desktop, type Chunk, type DocumentInfo } from './desktop'
 
 vi.mock('./desktop', () => ({
-  desktop: { pick: vi.fn(), detail: vi.fn(), preview: vi.fn(), onDrop: vi.fn(), openDrop: vi.fn(), copy: vi.fn() },
+  desktop: { pick: vi.fn(), detail: vi.fn(), preview: vi.fn(), onDrop: vi.fn(), openDrop: vi.fn(), adjacent: vi.fn(), copy: vi.fn() },
 }))
 
 function chunk(name: string, description: string, offset: number, crcOk = true, textKeyword: string | null = null): Chunk {
@@ -176,4 +176,21 @@ it('pages through large chunk lists in file order', async () => {
   expect(within(nextTable).getAllByRole('row')).toHaveLength(3)
   await user.click(within(nextTable).getAllByRole('button')[1])
   expect(vi.mocked(desktop.detail)).toHaveBeenLastCalledWith(1, 201)
+})
+
+it('uses left and right to navigate from the current document', async () => {
+  const user = userEvent.setup()
+  const adjacent = vi.mocked(desktop.adjacent)
+  adjacent.mockResolvedValueOnce({ ...sample, id: 2, name: 'next.png' }).mockResolvedValueOnce(null)
+  render(<App />)
+  await user.keyboard('{ArrowRight}')
+  expect(adjacent).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  await screen.findByText('sample.png')
+  await user.keyboard('{ArrowRight}')
+  expect(await screen.findByText('next.png')).toBeInTheDocument()
+  expect(adjacent).toHaveBeenLastCalledWith(1, 'next')
+  await user.keyboard('{ArrowLeft}')
+  expect(adjacent).toHaveBeenLastCalledWith(2, 'previous')
+  expect(screen.getByText('next.png')).toBeInTheDocument()
 })

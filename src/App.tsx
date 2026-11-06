@@ -33,6 +33,22 @@ export default function App() {
     return () => { active = false; unlisten?.() }
   }, [open])
 
+  const documentId = document?.id
+  useEffect(() => {
+    if (documentId === undefined) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+      if (event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select, pre'))) return
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const direction = event.key === 'ArrowLeft' ? 'previous' : 'next'
+      void open(() => desktop.adjacent(documentId, direction))
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [documentId, open])
+
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand">
@@ -50,6 +66,6 @@ export default function App() {
         <h2>PNG ファイルを選択してください</h2>
         <p>ここに PNG をドロップするか、上のボタンから開いてください。</p>
       </section>}
-    <footer>PNG STRUCTURE INSPECTOR <span>読み取り専用</span></footer>
+    <footer>{document ? <span><kbd>←</kbd> 前の画像 · <kbd>→</kbd> 次の画像</span> : "PNG STRUCTURE INSPECTOR"} <span>読み取り専用</span></footer>
   </main>
 }

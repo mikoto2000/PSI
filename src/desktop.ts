@@ -52,6 +52,7 @@ export const desktop = {
   openDrop: () => invoke<DocumentInfo | null>('open_drop'),
   copy: (text: string) => writeText(text),
   pick: () => invoke<DocumentInfo | null>('pick_png'),
+  adjacent: (id: number, direction: 'previous' | 'next') => invoke<DocumentInfo | null>('adjacent_png', { id, direction }),
   detail: (id: number, index: number) => invoke<Detail>('chunk_detail', { id, index }),
   preview: (id: number) => invoke<ArrayBuffer>('png_preview', { id }),
 }

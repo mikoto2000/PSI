@@ -2,7 +2,7 @@
 
 mod document;
 
-use document::{DocumentInfo, Session};
+use document::{Direction, DocumentInfo, Session};
 use png_inspector::Detail;
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{
@@ -49,6 +49,17 @@ async fn open_drop(app: AppHandle) -> Result<Option<DocumentInfo>, String> {
 }
 
 #[tauri::command]
+async fn adjacent_png(
+    app: AppHandle,
+    id: u32,
+    direction: Direction,
+) -> Result<Option<DocumentInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<Session>().adjacent(id, direction))
+        .await
+        .map_err(worker_error)?
+}
+
+#[tauri::command]
 async fn chunk_detail(app: AppHandle, id: u32, index: usize) -> Result<Detail, String> {
     tauri::async_runtime::spawn_blocking(move || app.state::<Session>().detail(id, index))
         .await
@@ -89,6 +100,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             pick_png,
             open_drop,
+            adjacent_png,
             chunk_detail,
             png_preview
         ])
