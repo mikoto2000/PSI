@@ -17,11 +17,12 @@ pub fn validate_signature(reader: &mut impl Read) -> Result<(), String> {
     Ok(())
 }
 
+mod header;
+mod scan;
+mod text;
+pub use header::Header;
+pub use scan::{Chunk, Report, scan};
+pub use text::{Text, decode_text};
+
 #[cfg(test)]
 mod tests;
-
-mod scan;
-pub use scan::{Chunk, Report, scan};
-
-mod header;
-pub use header::Header;

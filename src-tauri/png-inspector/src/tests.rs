@@ -185,3 +185,47 @@ fn rejects_illegal_header_fields_and_reports_them_during_scan() {
             .any(|m| m.contains("bit depth"))
     );
 }
+
+#[test]
+fn decodes_latin1_text_and_accepts_an_empty_body() {
+    let text = crate::text::decode_text("tEXt", b"Caf\xe9\0Gr\xfc\xdfe\n").unwrap();
+    assert_eq!(
+        (text.keyword.as_str(), text.text.as_str()),
+        ("Café", "Grüße\n")
+    );
+    assert_eq!((text.encoding, text.compressed), ("Latin-1", false));
+    assert!(
+        crate::text::decode_text("tEXt", b"Title\0")
+            .unwrap()
+            .text
+            .is_empty()
+    );
+}
+
+#[test]
+fn validates_latin1_keyword_and_body_separators() {
+    use crate::text::decode_text;
+    for data in [
+        b"\0v".as_slice(),
+        b" Key\0v",
+        b"Key \0v",
+        b"K  Y\0v",
+        b"K\xa0Y\0v",
+        b"K\x80Y\0v",
+    ] {
+        assert!(decode_text("tEXt", data).unwrap_err().contains("Keyword"));
+    }
+    let mut long = vec![b'k'; 80];
+    long.push(0);
+    assert!(decode_text("tEXt", &long).unwrap_err().contains("Keyword"));
+    assert!(
+        decode_text("tEXt", b"Title")
+            .unwrap_err()
+            .contains("separator")
+    );
+    assert!(
+        decode_text("tEXt", b"Title\0a\0b")
+            .unwrap_err()
+            .contains("NUL")
+    );
+}
