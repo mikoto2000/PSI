@@ -99,39 +99,25 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
                 }
             }
         }
-        let mut text_keyword = None;
-        if code == *b"IHDR" && length != 13 {
-            issues.push("IHDR must contain 13 bytes".into());
+        let (computed_crc, stored_crc, prefix) = read_payload(reader, &code, length, &mut buffer)?;
+        if code == *b"IHDR" {
+            match Header::decode(prefix.as_slice()) {
+                Ok(header) if report.chunks.is_empty() => report.header = Some(header),
+                Ok(_) => {}
+                Err(error) => issues.push(error),
+            }
         }
-        if length == 0 && matches!(&code, b"tEXt" | b"zTXt" | b"iTXt") {
-            issues.push("Missing Keyword separator".into());
-        }
-        let mut hasher = crc32fast::Hasher::new();
-        hasher.update(&code);
-        let mut remaining = length as usize;
-        while remaining != 0 {
-            let count = remaining.min(buffer.len());
-            reader
-                .read_exact(&mut buffer[..count])
-                .map_err(read_error)?;
-            if code == *b"IHDR" && length == 13 {
-                match Header::decode(&buffer[..count]) {
-                    Ok(header) if report.chunks.is_empty() => report.header = Some(header),
-                    Ok(_) => {}
-                    Err(error) => issues.push(error),
+        let text_keyword = if matches!(&code, b"tEXt" | b"zTXt" | b"iTXt") {
+            match keyword(prefix.as_slice()) {
+                Ok((key, _)) => Some(key),
+                Err(error) => {
+                    issues.push(error);
+                    None
                 }
             }
-            if remaining == length as usize && matches!(&code, b"tEXt" | b"zTXt" | b"iTXt") {
-                match keyword(&buffer[..count.min(80)]) {
-                    Ok((key, _)) => text_keyword = Some(key),
-                    Err(error) => issues.push(error),
-                }
-            }
-            hasher.update(&buffer[..count]);
-            remaining -= count;
-        }
-        let mut crc = [0; 4];
-        reader.read_exact(&mut crc).map_err(read_error)?;
+        } else {
+            None
+        };
         report.chunks.push(Chunk {
             name,
             description: description.unwrap_or("Unknown chunk"),
@@ -139,8 +125,8 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
             text_keyword,
             length,
             offset,
-            stored_crc: u32::from_be_bytes(crc),
-            computed_crc: hasher.finalize(),
+            stored_crc,
+            computed_crc,
             issues,
         });
         offset += span;
@@ -163,6 +149,46 @@ pub fn scan(reader: &mut (impl Read + Seek)) -> Result<Report, String> {
         }
     }
     Ok(report)
+}
+
+struct Prefix {
+    bytes: [u8; 80],
+    len: usize,
+}
+
+impl Prefix {
+    fn as_slice(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+}
+
+fn read_payload(
+    reader: &mut impl Read,
+    code: &[u8; 4],
+    length: u32,
+    buffer: &mut [u8; 65_536],
+) -> Result<(u32, u32, Prefix), String> {
+    let mut hasher = crc32fast::Hasher::new();
+    hasher.update(code);
+    let mut remaining = length as usize;
+    let mut prefix = Prefix {
+        bytes: [0; 80],
+        len: remaining.min(80),
+    };
+    while remaining != 0 {
+        let count = remaining.min(buffer.len());
+        reader
+            .read_exact(&mut buffer[..count])
+            .map_err(read_error)?;
+        if remaining == length as usize {
+            prefix.bytes[..prefix.len].copy_from_slice(&buffer[..prefix.len]);
+        }
+        hasher.update(&buffer[..count]);
+        remaining -= count;
+    }
+    let mut crc = [0; 4];
+    reader.read_exact(&mut crc).map_err(read_error)?;
+    Ok((hasher.finalize(), u32::from_be_bytes(crc), prefix))
 }
 
 #[derive(Default)]
