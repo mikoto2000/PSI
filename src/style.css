@@ -16,8 +16,8 @@ button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .65; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .app-shell { width: min(100%, 1600px); min-height: 100vh; padding: 24px clamp(16px, 2.5vw, 38px) 12px; margin: auto; display: flex; flex-direction: column; gap: 16px; }
-.topbar, .brand, .filebar, .file-id, .panel-title { display: flex; align-items: center; gap: 12px; }
-.topbar, .filebar, .panel-title { justify-content: space-between; }
+.topbar, .brand, .filebar, .file-id, .panel-title { @apply flex items-center gap-3; }
+.topbar, .filebar, .panel-title { @apply justify-between; }
 .topbar { padding: 0 0 18px; border-bottom: 1px solid var(--line); }
 .brand-mark { flex: none; display: grid; place-items: center; width: 42px; height: 42px; background: #173a3e; border: 1px solid #2c6264; border-radius: 11px; color: var(--accent); font-size: 25px; }
 h1 { font-size: clamp(15px, 2.2vw, 24px); line-height: 1.2; font-weight: 720; letter-spacing: -.025em; }
@@ -61,7 +61,7 @@ td small { display: block; margin-top: 2px; color: var(--muted); line-height: 1.
 .pill.ok { background: #173b39; color: #a6eed2; }
 .pill.bad { background: #43272c; color: #ffc3bb; }
 .numeric, .mono { font-family: var(--mono); }
-.numeric { white-space: nowrap; }
+.numeric { @apply whitespace-nowrap tabular-nums; }
 .warn-mark { color: #ffda94; }
 .chunk-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; }
 .chunk-hero h3 { color: var(--accent); font: 750 25px var(--mono); }
