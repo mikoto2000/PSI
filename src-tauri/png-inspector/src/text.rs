@@ -101,7 +101,7 @@ pub(crate) fn keyword(data: &[u8]) -> Result<(String, &[u8]), String> {
     Ok((latin1(key), rest))
 }
 
-fn split_field<'a>(data: &'a [u8], field: &str) -> Result<(&'a [u8], &'a [u8]), String> {
+pub(crate) fn split_field<'a>(data: &'a [u8], field: &str) -> Result<(&'a [u8], &'a [u8]), String> {
     data.iter()
         .position(|b| *b == 0)
         .map(|index| (&data[..index], &data[index + 1..]))
@@ -115,6 +115,10 @@ fn latin1(bytes: &[u8]) -> String {
 pub(crate) const MAX_EXPANDED: usize = 4 * 1024 * 1024;
 
 pub(crate) fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {
+    inflate_up_to(data, MAX_EXPANDED)
+}
+
+pub(crate) fn inflate_up_to(data: &[u8], limit: usize) -> Result<Vec<u8>, String> {
     use flate2::{Decompress, FlushDecompress, Status};
     let mut decoder = Decompress::new(true);
     let mut output = Vec::new();
@@ -126,8 +130,10 @@ pub(crate) fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {
             .decompress(&data[consumed..], &mut block, FlushDecompress::None)
             .map_err(|_| "Invalid zlib stream")?;
         let end = decoder.total_out() as usize;
-        if end > MAX_EXPANDED {
-            return Err("zlib output exceeds the 4 MiB expansion limit".into());
+        if end > limit {
+            return Err(format!(
+                "zlib output exceeds the {limit}-byte expansion limit"
+            ));
         }
         output.extend_from_slice(&block[..end - produced]);
         if status == Status::StreamEnd {

@@ -519,3 +519,42 @@ fn preview_rejects_large_or_animated_images_independently_of_scan() {
     assert!(read_preview(&mut reader).unwrap_err().contains("8 MiB"));
     assert_eq!(scan(&mut reader).unwrap().chunks.len(), 4);
 }
+
+#[test]
+fn rejects_preview_metadata_that_exceeds_the_aggregate_expansion_budget() {
+    let stream = zlib(&vec![b'x'; 3 * 1024 * 1024]);
+    let metadata = chunk(b"zTXt", &[b"Title\0\0".as_slice(), &stream].concat());
+    let mut reader = Cursor::new(valid_png(&[metadata.clone(), metadata.clone(), metadata]));
+    assert!(read_preview(&mut reader).unwrap_err().contains("metadata"));
+    let report = scan(&mut reader).unwrap();
+    assert_eq!(report.chunks.len(), 6);
+    assert!(read_detail(&mut reader, &report.chunks[1]).is_ok());
+}
+
+#[test]
+fn checks_large_offsets_without_addition_overflow() {
+    struct HugeFile(Cursor<Vec<u8>>);
+    impl Read for HugeFile {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buffer)
+        }
+    }
+    impl std::io::Seek for HugeFile {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            if pos == std::io::SeekFrom::End(0) {
+                Ok(u64::MAX)
+            } else {
+                self.0.seek(pos)
+            }
+        }
+    }
+    let mut reader = HugeFile(Cursor::new(valid_png(&[])));
+    assert!(scan(&mut reader).unwrap().issues[0].contains("trailing bytes"));
+    let mut reader = Cursor::new(valid_png(&[]));
+    let mut report = scan(&mut reader).unwrap();
+    report.chunks[0].offset = u64::MAX;
+    assert_eq!(
+        read_detail(&mut reader, &report.chunks[0]).unwrap_err(),
+        "Invalid chunk offset"
+    );
+}
