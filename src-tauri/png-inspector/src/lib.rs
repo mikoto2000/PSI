@@ -19,3 +19,6 @@ pub fn validate_signature(reader: &mut impl Read) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests;
+
+mod scan;
+pub use scan::{Chunk, Report, scan};
