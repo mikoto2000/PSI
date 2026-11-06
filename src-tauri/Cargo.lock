@@ -2230,6 +2230,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "png-inspector"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "serde",
+]
+
+[[package]]
 name = "png-structure-inspector"
 version = "0.1.0"
 dependencies = [

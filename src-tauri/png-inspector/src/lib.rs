@@ -1,0 +1,21 @@
+use std::io::{ErrorKind, Read};
+
+const SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+
+pub fn validate_signature(reader: &mut impl Read) -> Result<(), String> {
+    let mut bytes = [0; 8];
+    reader.read_exact(&mut bytes).map_err(|error| {
+        if error.kind() == ErrorKind::UnexpectedEof {
+            "Incomplete PNG signature".into()
+        } else {
+            format!("Could not read PNG signature: {error}")
+        }
+    })?;
+    if &bytes != SIGNATURE {
+        return Err("Invalid PNG signature".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;
