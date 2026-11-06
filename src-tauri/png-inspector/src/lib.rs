@@ -32,3 +32,6 @@ pub use detail::{Detail, read_detail};
 
 mod kind;
 pub use kind::Attributes;
+
+mod preview;
+pub use preview::read_preview;

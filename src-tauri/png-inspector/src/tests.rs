@@ -483,3 +483,39 @@ fn reports_palette_and_metadata_order_rules() {
     assert!(report.chunks[2].issues.iter().any(|m| m.contains("order")));
     assert!(report.chunks[3].issues.iter().any(|m| m.contains("before")));
 }
+
+pub(crate) fn valid_png(extras: &[Vec<u8>]) -> Vec<u8> {
+    let mut bytes = png(extras);
+    bytes.truncate(bytes.len() - 24);
+    bytes.extend(chunk(b"IDAT", &zlib(&[0, 255, 128, 0, 128])));
+    bytes.extend(chunk(b"IEND", &[]));
+    bytes
+}
+
+#[test]
+fn preview_returns_original_bytes_for_a_small_static_png() {
+    let bytes = valid_png(&[chunk(b"tEXt", b"Title\0Hi")]);
+    assert_eq!(read_preview(&mut Cursor::new(&bytes)).unwrap(), bytes);
+}
+
+#[test]
+fn preview_rejects_large_or_animated_images_independently_of_scan() {
+    let animated = valid_png(&[chunk(b"acTL", &[0, 0, 0, 1, 0, 0, 0, 0])]);
+    assert!(
+        read_preview(&mut Cursor::new(animated))
+            .unwrap_err()
+            .contains("APNG")
+    );
+    let mut large = valid_png(&[]);
+    large[16..20].copy_from_slice(&50_000_u32.to_be_bytes());
+    large[20..24].copy_from_slice(&50_000_u32.to_be_bytes());
+    assert!(
+        read_preview(&mut Cursor::new(large))
+            .unwrap_err()
+            .contains("pixel")
+    );
+    let oversized = valid_png(&[chunk(b"vpAg", &vec![0; 8 * 1024 * 1024])]);
+    let mut reader = Cursor::new(oversized);
+    assert!(read_preview(&mut reader).unwrap_err().contains("8 MiB"));
+    assert_eq!(scan(&mut reader).unwrap().chunks.len(), 4);
+}
