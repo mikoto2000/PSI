@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { desktop, type Chunk, type DocumentInfo } from './desktop'
+import { desktop } from './desktop'
+import type { Chunk, DocumentInfo } from './inspection'
 
 vi.mock('./desktop', () => ({
   desktop: { pick: vi.fn(), detail: vi.fn(), preview: vi.fn(), onDrop: vi.fn(), openDrop: vi.fn(), adjacent: vi.fn(), copy: vi.fn() },
@@ -176,6 +177,24 @@ it('pages through large chunk lists in file order', async () => {
   expect(within(nextTable).getAllByRole('row')).toHaveLength(3)
   await user.click(within(nextTable).getAllByRole('button')[1])
   expect(vi.mocked(desktop.detail)).toHaveBeenLastCalledWith(1, 201)
+})
+
+it('opens the latest dropped file after the current open finishes', async () => {
+  const user = userEvent.setup()
+  let finishPick: (document: DocumentInfo) => void = () => {}
+  vi.mocked(desktop.pick).mockImplementationOnce(() => new Promise((resolve) => { finishPick = resolve }))
+  vi.mocked(desktop.openDrop).mockResolvedValue({ ...sample, id: 2, name: 'dropped.png' })
+  render(<App />)
+  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  const onDrop = vi.mocked(desktop.onDrop).mock.lastCall![0]
+
+  onDrop()
+  onDrop()
+  expect(desktop.openDrop).not.toHaveBeenCalled()
+
+  await act(async () => { finishPick(sample) })
+  expect(await screen.findByText('dropped.png')).toBeInTheDocument()
+  expect(desktop.openDrop).toHaveBeenCalledTimes(1)
 })
 
 it('uses left and right to navigate from the current document', async () => {

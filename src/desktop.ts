@@ -2,50 +2,7 @@ import { listen } from '@tauri-apps/api/event'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { invoke } from '@tauri-apps/api/core'
 
-export interface Header {
-  width: number
-  height: number
-  bitDepth: number
-  colorName: string
-}
-
-export interface Chunk {
-  name: string
-  description: string
-  length: number
-  offset: number
-  storedCrc: number
-  computedCrc: number
-  issues: string[]
-  textKeyword: string | null
-  attributes: {
-    ancillary: boolean
-    private: boolean
-    reservedBitSet: boolean
-    safeToCopy: boolean
-  } | null
-}
-
-export interface DocumentInfo {
-  id: number
-  name: string
-  size: number
-  report: { header: Header | null; chunks: Chunk[]; issues: string[] }
-}
-
-export interface TextMetadata {
-  keyword: string
-  text: string
-  languageTag: string | null
-  translatedKeyword: string | null
-  compressed: boolean
-  encoding: string
-}
-
-export interface Detail {
-  fields: { label: string; value: string }[]
-  text: TextMetadata | null
-}
+import type { Detail, DocumentInfo } from './inspection'
 
 export const desktop = {
   onDrop: (handler: () => void) => listen('png-drop', handler),
