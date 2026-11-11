@@ -1,7 +1,8 @@
 use crate::{
     Header,
     kind::{Attributes, description},
-    text::keyword,
+    metadata::keyword,
+    read_error,
 };
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom};
@@ -273,8 +274,4 @@ impl Order {
         self.after_idat |= self.idat && code != b"IDAT";
         issues
     }
-}
-
-pub(crate) fn read_error(error: std::io::Error) -> String {
-    format!("Could not read PNG: {error}")
 }

@@ -499,6 +499,33 @@ fn preview_returns_original_bytes_for_a_small_static_png() {
 }
 
 #[test]
+fn rejects_details_when_chunk_header_or_stored_crc_changed_after_scanning() {
+    let bytes = valid_png(&[chunk(b"tEXt", b"Title\0Hi")]);
+    let report = inspect(bytes.clone());
+    let text = &report.chunks[1];
+    let start = text.offset as usize;
+    for position in [start + 3, start + 4, start + 8 + text.length as usize] {
+        let mut modified = bytes.clone();
+        modified[position] ^= 1;
+        let error = read_detail(&mut Cursor::new(modified), text).unwrap_err();
+        assert!(error.contains("changed after inspection"), "{error}");
+    }
+}
+
+#[test]
+fn preview_and_detail_agree_on_international_text_framing() {
+    let valid = valid_png(&[chunk(b"iTXt", b"Title\0\0\x07ja\0\0Hello")]);
+    assert_eq!(read_preview(&mut Cursor::new(&valid)).unwrap(), valid);
+
+    let malformed = valid_png(&[chunk(b"iTXt", b"Title\0\0\0ja")]);
+    let mut reader = Cursor::new(malformed);
+    let report = scan(&mut reader).unwrap();
+    let error = read_detail(&mut reader, &report.chunks[1]).unwrap_err();
+    assert!(error.contains("Language Tag separator"));
+    assert!(read_preview(&mut reader).unwrap_err().contains(&error));
+}
+
+#[test]
 fn preview_rejects_large_or_animated_images_independently_of_scan() {
     let animated = valid_png(&[chunk(b"acTL", &[0, 0, 0, 1, 0, 0, 0, 0])]);
     assert!(

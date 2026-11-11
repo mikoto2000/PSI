@@ -18,6 +18,7 @@ pub fn validate_signature(reader: &mut impl Read) -> Result<(), String> {
 }
 
 mod header;
+mod metadata;
 mod scan;
 mod text;
 pub use header::Header;
@@ -35,3 +36,7 @@ pub use kind::Attributes;
 
 mod preview;
 pub use preview::read_preview;
+
+fn read_error(error: std::io::Error) -> String {
+    format!("Could not read PNG: {error}")
+}

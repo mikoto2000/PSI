@@ -1,7 +1,7 @@
 use crate::{
-    Chunk, scan,
-    scan::read_error,
-    text::{MAX_EXPANDED, inflate_up_to, split_field},
+    Chunk,
+    metadata::{MAX_EXPANDED, inflate_up_to, international_fields, keyword, zlib_stream},
+    read_error, scan,
 };
 use std::io::{Cursor, Read, Seek};
 
@@ -62,23 +62,13 @@ fn check_compressed_metadata(bytes: &[u8], chunks: &[Chunk]) -> Result<(), Strin
 fn metadata_stream<'a>(name: &str, data: &'a [u8]) -> Result<Option<&'a [u8]>, String> {
     match name {
         "zTXt" | "iCCP" => {
-            let (_, body) = split_field(data, "Keyword or profile name")?;
-            match body {
-                [0, stream @ ..] => Ok(Some(stream)),
-                _ => Err("Invalid compression method".into()),
-            }
+            let (_, body) = keyword(data)?;
+            Ok(Some(zlib_stream(name, body)?))
         }
         "iTXt" => {
-            let (_, body) = split_field(data, "Keyword")?;
-            match body {
-                [0, _, ..] => Ok(None),
-                [1, 0, fields @ ..] => {
-                    let (_, rest) = split_field(fields, "Language Tag")?;
-                    let (_, stream) = split_field(rest, "Translated Keyword")?;
-                    Ok(Some(stream))
-                }
-                _ => Err("Invalid compression fields".into()),
-            }
+            let (_, body) = keyword(data)?;
+            let text = international_fields(body)?;
+            Ok(text.compressed.then_some(text.body))
         }
         _ => Ok(None),
     }

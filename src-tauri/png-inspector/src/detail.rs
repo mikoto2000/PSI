@@ -1,7 +1,7 @@
 use crate::{
     Chunk, Header, Text, decode_text,
-    scan::read_error,
-    text::{inflate, keyword},
+    metadata::{inflate, keyword, zlib_stream},
+    read_error,
 };
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom};
@@ -38,15 +38,28 @@ pub fn read_detail(reader: &mut (impl Read + Seek), chunk: &Chunk) -> Result<Det
             chunk.name
         ));
     }
-    let start = chunk.offset.checked_add(8).ok_or("Invalid chunk offset")?;
-    reader.seek(SeekFrom::Start(start)).map_err(read_error)?;
+    chunk
+        .offset
+        .checked_add(12 + u64::from(chunk.length))
+        .ok_or("Invalid chunk offset")?;
+    reader
+        .seek(SeekFrom::Start(chunk.offset))
+        .map_err(read_error)?;
+    let mut header = [0; 8];
+    reader.read_exact(&mut header).map_err(read_error)?;
+    let changed = "PNG changed after inspection. Reopen the file.";
+    if header[..4] != chunk.length.to_be_bytes() || &header[4..] != chunk.name.as_bytes() {
+        return Err(changed.into());
+    }
     let mut data = vec![0; chunk.length as usize];
     reader.read_exact(&mut data).map_err(read_error)?;
+    let mut crc = [0; 4];
+    reader.read_exact(&mut crc).map_err(read_error)?;
     let mut hasher = crc32fast::Hasher::new();
-    hasher.update(chunk.name.as_bytes());
+    hasher.update(&header[4..]);
     hasher.update(&data);
-    if hasher.finalize() != chunk.computed_crc {
-        return Err("PNG changed after inspection. Reopen the file.".into());
+    if hasher.finalize() != chunk.computed_crc || u32::from_be_bytes(crc) != chunk.stored_crc {
+        return Err(changed.into());
     }
 
     let mut detail = Detail::default();
@@ -188,10 +201,7 @@ fn fields(name: &str, data: &[u8]) -> Result<Vec<Field>, String> {
 
 fn icc_fields(data: &[u8]) -> Result<Vec<Field>, String> {
     let (profile_name, body) = keyword(data)?;
-    let [0, stream @ ..] = body else {
-        return Err("Invalid or missing iCCP compression method".into());
-    };
-    let profile = inflate(stream)?;
+    let profile = inflate(zlib_stream("iCCP", body)?)?;
     if profile.len() < 132
         || &profile[36..40] != b"acsp"
         || be32(&profile[..4]) as usize != profile.len()

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { desktop, type DocumentInfo } from './desktop'
+import { desktop } from './desktop'
+import type { DocumentInfo } from './inspection'
 import { Inspector } from './Inspector'
 
 export default function App() {
@@ -7,17 +8,25 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const opening = useRef(false)
+  const pendingDrop = useRef(false)
 
   const open = useCallback(async (load: () => Promise<DocumentInfo | null>) => {
     if (opening.current) return
     opening.current = true
     setBusy(true)
-    setError('')
     try {
-      const selected = await load()
-      if (selected) setDocument(selected)
-    } catch (cause) {
-      setError(String(cause))
+      let loadNext = load
+      do {
+        pendingDrop.current = false
+        setError('')
+        try {
+          const selected = await loadNext()
+          if (selected) setDocument(selected)
+        } catch (cause) {
+          setError(String(cause))
+        }
+        loadNext = desktop.openDrop
+      } while (pendingDrop.current)
     } finally {
       opening.current = false
       setBusy(false)
@@ -27,7 +36,12 @@ export default function App() {
   useEffect(() => {
     let active = true
     let unlisten: (() => void) | undefined
-    void desktop.onDrop(() => { if (active) void open(desktop.openDrop) })
+    void desktop.onDrop(() => {
+      if (!active) return
+      // Tauri retains the latest drop until openDrop consumes it.
+      if (opening.current) pendingDrop.current = true
+      else void open(desktop.openDrop)
+    })
       .then((stop) => { if (active) unlisten = stop; else stop() })
       .catch((cause) => { if (active) setError('ドロップを有効にできませんでした。' + String(cause)) })
     return () => { active = false; unlisten?.() }
@@ -59,7 +73,7 @@ export default function App() {
     </header>
     {busy && <p className="message" role="status">PNG を読み込み中…</p>}
     {error && <p className="message problem" role="alert">PNG を開けませんでした。{error}</p>}
-    {document ? <Inspector key={document.id} document={document} /> :
+    {document ? <Inspector key={document.id} document={document} actions={desktop} /> :
       <section className="empty">
         <div className="empty-icon" aria-hidden="true">PNG</div>
         <p className="eyebrow">ファイルを検査</p>
