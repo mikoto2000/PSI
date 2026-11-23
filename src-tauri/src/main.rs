@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod document;
+mod jpeg;
 
 use document::{Direction, DocumentInfo, Session};
 use png_inspector::Detail;
@@ -20,7 +21,7 @@ async fn pick_png(window: WebviewWindow) -> Result<Option<DocumentInfo>, String>
             .dialog()
             .file()
             .set_parent(&window)
-            .add_filter("PNG", &["png", "apng"])
+            .add_filter("Images", document::IMAGE_EXTENSIONS)
             .blocking_pick_file();
         path.map(|path| {
             let path = path.into_path().map_err(|error| error.to_string())?;
@@ -89,7 +90,7 @@ fn main() {
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
                 let path = match paths.as_slice() {
                     [path] => Ok(path.clone()),
-                    _ => Err("PNG ファイルは 1 個ずつドロップしてください。".into()),
+                    _ => Err("画像ファイルは 1 個ずつドロップしてください。".into()),
                 };
                 if let Ok(mut pending) = window.state::<PendingDrop>().0.lock() {
                     *pending = Some(path);

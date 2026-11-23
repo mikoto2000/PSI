@@ -79,6 +79,35 @@ fn serializes_png_fixtures_to_the_frontend_contract() {
 }
 
 #[test]
+fn opens_a_jpeg_and_serves_its_report_marker_details_and_preview() {
+    let path = fixture("jpeg/baseline.jpg");
+    let session = Session::default();
+    let info = session.open(&path).unwrap();
+    let id = info.id;
+    let json = to_value(info).unwrap();
+    let report = &json["report"];
+
+    assert_eq!(json["name"], "baseline.jpg");
+    assert_eq!(report["format"], "JPEG");
+    assert_eq!(report["header"]["width"], 4);
+    assert_eq!(report["header"]["height"], 6);
+
+    let markers = report["chunks"].as_array().unwrap();
+    let frame_index = markers
+        .iter()
+        .position(|marker| marker["name"] == "SOF0")
+        .expect("the baseline JPEG should list a SOF0 marker");
+    let detail = session.detail(id, frame_index).unwrap();
+    assert!(
+        detail
+            .fields
+            .iter()
+            .any(|field| field.label == "Height" && field.value == "6")
+    );
+    assert_eq!(session.preview(id).unwrap(), fs::read(path).unwrap());
+}
+
+#[test]
 fn preserves_diagnostics_and_rejects_access_from_an_old_document() {
     let session = Session::default();
     let bad = session.open(&fixture("bad-crc.png")).unwrap();

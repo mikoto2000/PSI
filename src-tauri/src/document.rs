@@ -1,12 +1,25 @@
-use png_inspector::{Detail, Report, read_detail, read_preview, scan};
+use crate::jpeg;
+use png_inspector::Detail;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     ffi::OsString,
     fs::{self, File},
+    io::Read,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
 };
+
+pub const IMAGE_EXTENSIONS: &[&str] = &["png", "apng", "jpg", "jpeg"];
+
+#[derive(Serialize)]
+#[serde(tag = "format")]
+enum Report {
+    #[serde(rename = "PNG")]
+    Png(png_inspector::Report),
+    #[serde(rename = "JPEG")]
+    Jpeg(jpeg::Report),
+}
 
 #[derive(Serialize)]
 pub struct DocumentInfo {
@@ -41,11 +54,17 @@ impl Session {
     fn open_path(&self, path: &Path, expected_id: Option<u32>) -> Result<DocumentInfo, String> {
         let metadata = fs::metadata(path).map_err(file_error)?;
         if !metadata.is_file() {
-            return Err("Select a regular PNG file".into());
+            return Err("Select a regular image file".into());
         }
         let mut file = File::open(path).map_err(file_error)?;
         let size = file.metadata().map_err(file_error)?.len();
-        let report = Arc::new(scan(&mut file)?);
+        let mut signature = [0; 2];
+        file.read_exact(&mut signature).map_err(file_error)?;
+        let report = Arc::new(if signature == [0xFF, 0xD8] {
+            Report::Jpeg(jpeg::scan(&mut file)?)
+        } else {
+            Report::Png(png_inspector::scan(&mut file)?)
+        });
         let name = path
             .file_name()
             .ok_or("Missing file name")?
@@ -74,7 +93,7 @@ impl Session {
 
     pub fn adjacent(&self, id: u32, direction: Direction) -> Result<Option<DocumentInfo>, String> {
         let path = current(&mut *self.lock()?, id)?.path.clone();
-        let directory = path.parent().ok_or("Missing PNG folder")?;
+        let directory = path.parent().ok_or("Missing image folder")?;
         let name = path.file_name().ok_or("Missing file name")?;
         let order = match direction {
             Direction::Previous => Ordering::Less,
@@ -92,7 +111,9 @@ impl Session {
                 continue;
             }
             let supported = Path::new(&candidate).extension().is_some_and(|ext| {
-                ext.eq_ignore_ascii_case("png") || ext.eq_ignore_ascii_case("apng")
+                IMAGE_EXTENSIONS
+                    .iter()
+                    .any(|supported| ext.eq_ignore_ascii_case(supported))
             });
             if supported && entry.file_type().map_err(folder_error)?.is_file() {
                 nearest = Some(candidate);
@@ -106,14 +127,25 @@ impl Session {
     pub fn detail(&self, id: u32, index: usize) -> Result<Detail, String> {
         let mut active = self.lock()?;
         let active = current(&mut active, id)?;
-        let chunk = active.report.chunks.get(index).ok_or("No such PNG chunk")?;
-        read_detail(&mut active.file, chunk)
+        match active.report.as_ref() {
+            Report::Png(report) => {
+                let chunk = report.chunks.get(index).ok_or("No such PNG chunk")?;
+                png_inspector::read_detail(&mut active.file, chunk)
+            }
+            Report::Jpeg(report) => {
+                let marker = report.chunks.get(index).ok_or("No such JPEG marker")?;
+                jpeg::detail(&mut active.file, marker)
+            }
+        }
     }
 
     pub fn preview(&self, id: u32) -> Result<Vec<u8>, String> {
         let mut active = self.lock()?;
         let active = current(&mut active, id)?;
-        read_preview(&mut active.file)
+        match active.report.as_ref() {
+            Report::Png(_) => png_inspector::read_preview(&mut active.file),
+            Report::Jpeg(_) => jpeg::preview(&mut active.file),
+        }
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, Option<OpenFile>>, String> {
@@ -127,15 +159,15 @@ fn current(active: &mut Option<OpenFile>, id: u32) -> Result<&mut OpenFile, Stri
     active
         .as_mut()
         .filter(|file| file.id == id)
-        .ok_or_else(|| "PNG is no longer open".into())
+        .ok_or_else(|| "Image is no longer open".into())
 }
 
 fn file_error(error: std::io::Error) -> String {
-    format!("Could not open PNG: {error}")
+    format!("Could not open image: {error}")
 }
 
 fn folder_error(error: std::io::Error) -> String {
-    format!("Could not read the PNG folder: {error}")
+    format!("Could not read the image folder: {error}")
 }
 
 #[cfg(test)]

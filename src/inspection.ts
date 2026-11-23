@@ -10,11 +10,11 @@ export interface Chunk {
   description: string
   length: number
   offset: number
-  storedCrc: number
-  computedCrc: number
-  issues: string[]
-  textKeyword: string | null
-  attributes: {
+  storedCrc?: number
+  computedCrc?: number
+  issues?: string[]
+  textKeyword?: string | null
+  attributes?: {
     ancillary: boolean
     private: boolean
     reservedBitSet: boolean
@@ -26,7 +26,7 @@ export interface DocumentInfo {
   id: number
   name: string
   size: number
-  report: { header: Header | null; chunks: Chunk[]; issues: string[] }
+  report: { format: 'PNG' | 'JPEG'; header: Header | null; chunks: Chunk[]; issues: string[] }
 }
 
 export interface TextMetadata {

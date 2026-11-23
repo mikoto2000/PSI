@@ -29,7 +29,7 @@ pub use text::{Text, decode_text};
 mod tests;
 
 mod detail;
-pub use detail::{Detail, read_detail};
+pub use detail::{Detail, Field, read_detail};
 
 mod kind;
 pub use kind::Attributes;

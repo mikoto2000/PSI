@@ -1,6 +1,6 @@
-# テスト用 PNG
+# テスト用画像
 
-`node scripts/generate-fixtures.mjs` で 2 × 2 ピクセルのサンプルを生成します。Rust の結合テストとデスクトップ版の手動確認で使えます。
+`node scripts/generate-fixtures.mjs` で 2 × 2 ピクセルの PNG サンプルを生成します。Rust の結合テストとデスクトップ版の手動確認で使えます。
 
 | ファイル | 内容 |
 | --- | --- |
@@ -12,3 +12,5 @@
 | `multiple-text.png` | 同じ Keyword を持つ 3 種類のテキストと JSON |
 | `bad-crc.png` | tEXt の CRC が不一致 |
 | `truncated.png` | IEND の CRC の途中で切断 |
+
+`jpeg/baseline.jpg` は FFmpeg で生成した 4 × 6 ピクセルのベースライン JPEG です。Rust の結合テストで使用します。

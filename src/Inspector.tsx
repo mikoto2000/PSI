@@ -6,6 +6,8 @@ import { byteCount, offsetHex } from './inspectionDisplay'
 
 export function Inspector({ document, actions }: { document: DocumentInfo; actions: InspectionActions }) {
   const { report } = document
+  const jpeg = report.format === 'JPEG'
+  const unit = jpeg ? 'マーカー' : 'チャンク'
   const [index, setIndex] = useState(0)
   const [page, setPage] = useState(0)
   const [metadataOnly, setMetadataOnly] = useState(false)
@@ -30,51 +32,51 @@ export function Inspector({ document, actions }: { document: DocumentInfo; actio
     }
   }
   const crcErrors = report.chunks.filter((chunk) => chunk.storedCrc !== chunk.computedCrc).length
-  const structureWarnings = report.issues.length + report.chunks.reduce((sum, chunk) => sum + chunk.issues.length, 0)
+  const structureWarnings = report.issues.length + report.chunks.reduce((sum, chunk) => sum + (chunk.issues?.length ?? 0), 0)
 
   return <>
     <div className="filebar">
-      <div className="file-id"><span className="file-tag">PNG</span><strong title={document.name}>{document.name}</strong></div>
+      <div className="file-id"><span className="file-tag">{report.format}</span><strong title={document.name}>{document.name}</strong></div>
       <span className={crcErrors || structureWarnings ? 'pill bad' : 'pill ok'}>
-        CRC 不一致 {crcErrors} 件 · 構造警告 {structureWarnings} 件
+        {!jpeg && `CRC 不一致 ${crcErrors} 件 · `}構造警告 {structureWarnings} 件
       </span>
     </div>
-    {report.issues.length > 0 && <section className="message problem" aria-label="PNG 構造の問題">
-      <strong>PNG 構造の問題</strong><ul>{report.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+    {report.issues.length > 0 && <section className="message problem" aria-label={`${report.format} 構造の問題`}>
+      <strong>{report.format} 構造の問題</strong><ul>{report.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
     </section>}
     <div className="workspace">
       <Preview document={document} loadPreview={actions.preview} />
-      <section className="panel list-panel" aria-label="チャンク">
-        <div className="panel-title"><h2>チャンク一覧</h2><span className="pill">{report.chunks.length} 件</span></div>
-        <div className="view-switch" role="group" aria-label="チャンク表示">
+      <section className="panel list-panel" aria-label={unit}>
+        <div className="panel-title"><h2>{unit}一覧</h2><span className="pill">{report.chunks.length} 件</span></div>
+        {!jpeg && <div className="view-switch" role="group" aria-label="チャンク表示">
           <button aria-pressed={!metadataOnly} onClick={() => changeView(false)}>すべてのチャンク</button>
           <button aria-pressed={metadataOnly} onClick={() => changeView(true)}>テキストメタデータ <span>{textRows.length}</span></button>
-        </div>
-        <ChunkList key={`${metadataOnly}-${page}`} rows={pageRows} index={index} onSelect={setIndex} metadataOnly={metadataOnly} />
-        {pages > 1 && <nav className="pagination" aria-label="チャンク一覧のページ">
+        </div>}
+        <ChunkList key={`${metadataOnly}-${page}`} rows={pageRows} index={index} onSelect={setIndex} metadataOnly={metadataOnly} jpeg={jpeg} unit={unit} />
+        {pages > 1 && <nav className="pagination" aria-label={`${unit}一覧のページ`}>
           <button className="secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>前のページ</button>
           <span aria-live="polite">{page + 1} / {pages}</span>
           <button className="secondary" disabled={page + 1 === pages} onClick={() => setPage(page + 1)}>次のページ</button>
         </nav>}
       </section>
-      {chunk ? <ChunkDetail key={index} id={document.id} index={index} chunk={chunk} loadDetail={actions.detail} copyText={actions.copy} /> :
-        <section className="panel"><div className="panel-title"><h2>チャンク詳細</h2></div><p className="panel-body muted">表示できるチャンクがありません</p></section>}
+      {chunk ? <ChunkDetail key={index} id={document.id} index={index} chunk={chunk} unit={unit} loadDetail={actions.detail} copyText={actions.copy} /> :
+        <section className="panel"><div className="panel-title"><h2>{unit}詳細</h2></div><p className="panel-body muted">表示できる{unit}がありません</p></section>}
     </div>
   </>
 }
 
-function ChunkList({ rows, index, onSelect, metadataOnly }: { rows: { chunk: Chunk; item: number }[]; index: number; onSelect: (index: number) => void; metadataOnly: boolean }) {
-  if (!rows.length) return <p className="panel-body muted">{metadataOnly ? "テキストメタデータはありません" : "読み取れたチャンクはありません"}</p>
+function ChunkList({ rows, index, onSelect, metadataOnly, jpeg, unit }: { rows: { chunk: Chunk; item: number }[]; index: number; onSelect: (index: number) => void; metadataOnly: boolean; jpeg: boolean; unit: string }) {
+  if (!rows.length) return <p className="panel-body muted">{metadataOnly ? "テキストメタデータはありません" : `読み取れた${unit}はありません`}</p>
   return <div className="table-scroll">
-    <table aria-label={metadataOnly ? "テキストメタデータ一覧" : "チャンク一覧"}>
-      <thead><tr><th scope="col">チャンク</th><th scope="col">サイズ</th><th scope="col">オフセット</th><th scope="col">CRC</th></tr></thead>
+    <table aria-label={metadataOnly ? "テキストメタデータ一覧" : `${unit}一覧`}>
+      <thead><tr><th scope="col">{unit}</th><th scope="col">サイズ</th><th scope="col">オフセット</th>{!jpeg && <th scope="col">CRC</th>}</tr></thead>
       <tbody>{rows.map(({ chunk, item }) =>
         <tr key={chunk.offset} className={index === item ? 'selected' : ''} onClick={() => onSelect(item)}>
           <td><button className="chunk-button" aria-pressed={index === item} onClick={(event) => { event.stopPropagation(); onSelect(item) }}>{chunk.name}</button>
-            <small>{metadataOnly ? chunk.textKeyword ?? "Keyword 不明" : chunk.description}{chunk.issues.length > 0 && <span className="warn-mark" title={chunk.issues.join('\n')}> ⚠</span>}</small></td>
+            <small>{metadataOnly ? chunk.textKeyword ?? "Keyword 不明" : chunk.description}{Boolean(chunk.issues?.length) && <span className="warn-mark" title={chunk.issues?.join('\n')}> ⚠</span>}</small></td>
           <td className="numeric">{byteCount(chunk.length)}</td>
           <td className="numeric">{offsetHex(chunk.offset)}</td>
-          <td><Crc chunk={chunk} /></td>
+          {!jpeg && <td><Crc chunk={chunk} /></td>}
         </tr>)}</tbody>
     </table>
   </div>

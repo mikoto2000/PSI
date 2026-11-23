@@ -67,18 +67,18 @@ export default function App() {
     <header className="topbar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">▧</span>
-        <div><h1>PNG Structure Inspector</h1><p>PNG の構造とメタデータを調べる</p></div>
+        <div><h1>PNG Structure Inspector</h1><p>PNG / JPEG の構造とメタデータを調べる</p></div>
       </div>
-      <button className="primary" onClick={() => void open(desktop.pick)} disabled={busy}>PNG を開く</button>
+      <button className="primary" onClick={() => void open(desktop.pick)} disabled={busy}>画像を開く</button>
     </header>
-    {busy && <p className="message" role="status">PNG を読み込み中…</p>}
-    {error && <p className="message problem" role="alert">PNG を開けませんでした。{error}</p>}
+    {busy && <p className="message" role="status">画像を読み込み中…</p>}
+    {error && <p className="message problem" role="alert">画像を開けませんでした。{error}</p>}
     {document ? <Inspector key={document.id} document={document} actions={desktop} /> :
       <section className="empty">
         <div className="empty-icon" aria-hidden="true">PNG</div>
         <p className="eyebrow">ファイルを検査</p>
-        <h2>PNG ファイルを選択してください</h2>
-        <p>ここに PNG をドロップするか、上のボタンから開いてください。</p>
+        <h2>PNG または JPEG を選択してください</h2>
+        <p>ここに画像をドロップするか、上のボタンから開いてください。</p>
       </section>}
     <footer>{document ? <span><kbd>←</kbd> 前の画像 · <kbd>→</kbd> 次の画像</span> : "PNG STRUCTURE INSPECTOR"} <span>読み取り専用</span></footer>
   </main>

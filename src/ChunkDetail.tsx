@@ -3,10 +3,11 @@ import type { Chunk, Detail, InspectionActions, TextMetadata } from './inspectio
 import { Facts, byteCount, offsetHex } from './inspectionDisplay'
 import { formatJson } from './json'
 
-export function ChunkDetail({ chunk, id, index, loadDetail, copyText }: {
+export function ChunkDetail({ chunk, id, index, unit, loadDetail, copyText }: {
   chunk: Chunk
   id: number
   index: number
+  unit: string
   loadDetail: InspectionActions['detail']
   copyText: InspectionActions['copy']
 }) {
@@ -18,14 +19,19 @@ export function ChunkDetail({ chunk, id, index, loadDetail, copyText }: {
       .catch((cause) => { if (active) setError(String(cause)) })
     return () => { active = false }
   }, [id, index, loadDetail])
-  const attributes = chunk.attributes
-  const crcOk = chunk.storedCrc === chunk.computedCrc
+  const { attributes, storedCrc, computedCrc } = chunk
+  const hasCrc = storedCrc !== undefined && computedCrc !== undefined
+  const crcOk = storedCrc === computedCrc
+  const crcFields: [string, string][] = hasCrc ? [
+    ['保存された CRC', crcHex(storedCrc)],
+    ['計算した CRC', crcHex(computedCrc)],
+  ] : []
 
-  return <section className="panel detail-panel" aria-label="チャンク詳細">
-    <div className="panel-title"><h2>チャンク詳細</h2><span className="pill mono">#{index + 1}</span></div>
+  return <section className="panel detail-panel" aria-label={`${unit}詳細`}>
+    <div className="panel-title"><h2>{unit}詳細</h2><span className="pill mono">#{index + 1}</span></div>
     <div className="panel-body detail-body">
       <div className="chunk-hero">
-        <h3><code>{chunk.name}</code></h3><span className={crcOk ? 'pill ok' : 'pill bad'}>{crcOk ? 'CRC 一致' : 'CRC 不一致'}</span>
+        <h3><code>{chunk.name}</code></h3>{hasCrc && <span className={crcOk ? 'pill ok' : 'pill bad'}>{crcOk ? 'CRC 一致' : 'CRC 不一致'}</span>}
         <p>{chunk.description}</p>
       </div>
       {attributes && <div className="attributes">
@@ -33,12 +39,11 @@ export function ChunkDetail({ chunk, id, index, loadDetail, copyText }: {
         <span className="pill">{attributes.private ? 'Private' : 'Public'}</span>
         <span className="pill">{attributes.safeToCopy ? 'Safe-to-copy' : 'Unsafe-to-copy'}</span>
       </div>}
-      {chunk.issues.length > 0 && <ul className="detail-warnings">{chunk.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+      {Boolean(chunk.issues?.length) && <ul className="detail-warnings">{chunk.issues?.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
       <Facts fields={[
         ['データサイズ', byteCount(chunk.length)],
         ['オフセット', `${offsetHex(chunk.offset)} (${chunk.offset})`],
-        ['保存された CRC', crcHex(chunk.storedCrc)],
-        ['計算した CRC', crcHex(chunk.computedCrc)],
+        ...crcFields,
       ]} />
       {error ? <p className="problem detail-warnings" role="alert">{error}</p> : !detail ? <p className="muted" role="status">詳細を読み込み中…</p> :
         <>

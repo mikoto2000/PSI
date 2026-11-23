@@ -20,6 +20,7 @@ function chunk(name: string, description: string, offset: number, crcOk = true, 
 const sample: DocumentInfo = {
   id: 1, name: 'sample.png', size: 425,
   report: {
+    format: 'PNG',
     header: { width: 32, height: 24, bitDepth: 8, colorName: 'Truecolor with alpha' },
     issues: [],
     chunks: [chunk('IHDR', 'Image header', 8), chunk('IDAT', 'Compressed image data', 33, false), chunk('IEND', 'End of datastream', 58)],
@@ -47,13 +48,13 @@ describe('PNG inspection', () => {
   it('shows the empty state before a file is chosen', () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: 'PNG Structure Inspector' })).toBeInTheDocument()
-    expect(screen.getByText('PNG ファイルを選択してください')).toBeInTheDocument()
+    expect(screen.getByText('PNG または JPEG を選択してください')).toBeInTheDocument()
   })
 
   it('opens a PNG, lists chunks in file order and changes details when selected', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+    await user.click(screen.getByRole('button', { name: '画像を開く' }))
     expect(await screen.findByText('sample.png')).toBeInTheDocument()
     expect(screen.getByText('32 × 24')).toBeInTheDocument()
     expect(await screen.findByRole('img', { name: 'sample.png のプレビュー' })).toBeInTheDocument()
@@ -73,7 +74,7 @@ describe('PNG inspection', () => {
     vi.mocked(desktop.pick).mockRejectedValueOnce('Invalid PNG signature')
     const user = userEvent.setup()
     render(<App />)
-    const open = screen.getByRole('button', { name: 'PNG を開く' })
+    const open = screen.getByRole('button', { name: '画像を開く' })
     await user.click(open)
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid PNG signature')
     await user.click(open)
@@ -84,11 +85,31 @@ describe('PNG inspection', () => {
   it('keeps the chunk list when the image cannot be displayed', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+    await user.click(screen.getByRole('button', { name: '画像を開く' }))
     fireEvent.error(await screen.findByRole('img', { name: 'sample.png のプレビュー' }))
     expect(screen.getByText('画像をプレビューできませんでした')).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'チャンク一覧' })).toBeInTheDocument()
   })
+})
+
+it('shows JPEG markers and uses the JPEG preview MIME type', async () => {
+  vi.mocked(desktop.pick).mockResolvedValueOnce({
+    ...sample,
+    name: 'sample.jpg',
+    report: {
+      ...sample.report,
+      format: 'JPEG',
+      chunks: [{ name: 'SOI', description: 'Start of image', offset: 0, length: 0 }],
+    },
+  })
+  const user = userEvent.setup()
+  render(<App />)
+  await user.click(screen.getByRole('button', { name: '画像を開く' }))
+  const table = await screen.findByRole('table', { name: 'マーカー一覧' })
+  expect(within(table).getByRole('button', { name: 'SOI' })).toBeInTheDocument()
+  expect(screen.queryByText(/CRC/)).not.toBeInTheDocument()
+  expect(await screen.findByRole('img', { name: 'sample.jpg のプレビュー' })).toBeInTheDocument()
+  expect(vi.mocked(URL.createObjectURL).mock.calls[0][0]).toMatchObject({ type: 'image/jpeg' })
 })
 
 describe('text metadata', () => {
@@ -119,7 +140,7 @@ describe('text metadata', () => {
   it('shows each duplicate keyword, opens details and falls back to plain text', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+    await user.click(screen.getByRole('button', { name: '画像を開く' }))
     await user.click(await screen.findByRole('button', { name: /テキストメタデータ/ }))
     const table = screen.getByRole('table', { name: 'テキストメタデータ一覧' })
     expect(within(table).getAllByText('prompt')).toHaveLength(2)
@@ -137,7 +158,7 @@ describe('text metadata', () => {
     const user = userEvent.setup()
     const copy = vi.mocked(desktop.copy)
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+    await user.click(screen.getByRole('button', { name: '画像を開く' }))
     await user.click(await screen.findByRole('button', { name: 'tEXt' }))
     const body = await screen.findByLabelText('テキスト本文')
     expect(body.textContent).toBe(formatted)
@@ -154,7 +175,7 @@ describe('text metadata', () => {
 it('opens a dropped PNG and replaces the previous document', async () => {
   const user = userEvent.setup()
   render(<App />)
-  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  await user.click(screen.getByRole('button', { name: '画像を開く' }))
   expect(await screen.findByText('sample.png')).toBeInTheDocument()
   vi.mocked(desktop.openDrop).mockResolvedValue({ ...sample, id: 2, name: 'dropped.png' })
   const onDrop = vi.mocked(desktop.onDrop).mock.lastCall?.[0]
@@ -166,17 +187,34 @@ it('opens a dropped PNG and replaces the previous document', async () => {
 
 it('pages through large chunk lists in file order', async () => {
   const user = userEvent.setup()
-  const chunks = Array.from({ length: 202 }, (_, index) => chunk('vpAg', 'Unknown chunk', 8 + index * 12))
+  const firstPage = Array.from({ length: 200 }, (_, index) => chunk('vpAg', 'Unknown chunk', 8 + index * 25))
+  const chunks = [...firstPage, chunk('tEXt', 'Latin-1 text', 5008, true, 'Title'), chunk('IEND', 'End of datastream', 5033)]
   vi.mocked(desktop.pick).mockResolvedValue({ ...sample, report: { ...sample.report, chunks } })
+  vi.mocked(desktop.detail).mockImplementation(async (_, index) => ({
+    fields: [],
+    text: index === 200
+      ? { keyword: 'Title', text: 'Café', languageTag: null, translatedKeyword: null, compressed: false, encoding: 'Latin-1' }
+      : null,
+  }))
+
+  function displayedOffsets(table: HTMLElement) {
+    return within(table).getAllByRole('row').slice(1)
+      .map((row) => Number(within(row).getAllByRole('cell')[2].textContent))
+  }
+
   render(<App />)
-  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  await user.click(screen.getByRole('button', { name: '画像を開く' }))
   const table = await screen.findByRole('table', { name: 'チャンク一覧' })
-  expect(within(table).getAllByRole('row')).toHaveLength(201)
+  expect(displayedOffsets(table)).toEqual(firstPage.map(({ offset }) => offset))
   await user.click(screen.getByRole('button', { name: '次のページ' }))
   const nextTable = screen.getByRole('table', { name: 'チャンク一覧' })
-  expect(within(nextTable).getAllByRole('row')).toHaveLength(3)
-  await user.click(within(nextTable).getAllByRole('button')[1])
-  expect(vi.mocked(desktop.detail)).toHaveBeenLastCalledWith(1, 201)
+  expect(displayedOffsets(nextTable)).toEqual([5008, 5033])
+
+  await user.click(within(nextTable).getByRole('button', { name: 'tEXt' }))
+  const detail = within(screen.getByRole('region', { name: 'チャンク詳細' }))
+  expect(detail.getByRole('heading', { name: 'tEXt' })).toBeInTheDocument()
+  const body = await detail.findByLabelText('テキスト本文')
+  expect(body.textContent).toBe('Café')
 })
 
 it('opens the latest dropped file after the current open finishes', async () => {
@@ -204,7 +242,7 @@ it('uses left and right to navigate from the current document', async () => {
   render(<App />)
   await user.keyboard('{ArrowRight}')
   expect(adjacent).not.toHaveBeenCalled()
-  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  await user.click(screen.getByRole('button', { name: '画像を開く' }))
   await screen.findByText('sample.png')
   await user.keyboard('{ArrowRight}')
   expect(await screen.findByText('next.png')).toBeInTheDocument()
