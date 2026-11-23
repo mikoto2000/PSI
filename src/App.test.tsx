@@ -223,7 +223,7 @@ it('opens the latest dropped file after the current open finishes', async () => 
   vi.mocked(desktop.pick).mockImplementationOnce(() => new Promise((resolve) => { finishPick = resolve }))
   vi.mocked(desktop.openDrop).mockResolvedValue({ ...sample, id: 2, name: 'dropped.png' })
   render(<App />)
-  await user.click(screen.getByRole('button', { name: 'PNG を開く' }))
+  await user.click(screen.getByRole('button', { name: '画像を開く' }))
   const onDrop = vi.mocked(desktop.onDrop).mock.lastCall![0]
 
   onDrop()
